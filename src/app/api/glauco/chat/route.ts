@@ -266,13 +266,30 @@ export async function POST(req: NextRequest) {
       session.messages = [system, ...recent];
     }
 
-    // Llamar al LLM
-    const completion = await zai.chat.completions.create({
-      messages: session.messages,
-      thinking: { type: "disabled" },
-    });
+    // Llamar al LLM con timeout de 20s para evitar cuelgues indefinidos
+    let completion;
+    try {
+      const llmPromise = zai.chat.completions.create({
+        messages: session.messages,
+        thinking: { type: "disabled" },
+      });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("llm-timeout")), 20000),
+      );
+      completion = await Promise.race([llmPromise, timeoutPromise]);
+    } catch (llmErr) {
+      console.error("[Glauco] LLM falló o timeout:", llmErr);
+      // Respuesta de respaldo amigable si el LLM no responde
+      const response: ChatResponse = {
+        reply: "Compa, el servidor de IA está tardando más de lo normal. El servicio sigue activo — intenta escribirme de nuevo en un par de segundos.",
+        sessionId,
+        mood,
+        breathSuggested,
+      };
+      return NextResponse.json(response);
+    }
 
-    const reply = completion.choices[0]?.message?.content || "La paz esté contigo. No he podido procesar tu mensaje en este momento. ¿Quieres intentarlo nuevamente?";
+    const reply = completion?.choices?.[0]?.message?.content || "Compa, no pude generar una respuesta esta vez. ¿Puedes repetir tu mensaje?";
 
     // Añadir respuesta del asistente al historial
     session.messages.push({ role: "assistant", content: reply });

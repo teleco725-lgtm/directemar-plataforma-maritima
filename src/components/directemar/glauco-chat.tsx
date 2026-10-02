@@ -83,7 +83,12 @@ export function GlaucoChat() {
     if (stored) {
       try {
         const parsed = JSON.parse(stored) as Message[];
-        setMessages(parsed);
+        // Filtrar mensajes de error antiguos para que no persistan entre sesiones
+        // (un error temporal del servidor no debería quedar visible para siempre)
+        const cleaned = parsed.filter(
+          (m) => !m.id.startsWith("e-") || m.content.includes("Listo"),
+        );
+        setMessages(cleaned);
       } catch {}
     }
     let sid = localStorage.getItem(SESSION_KEY);
@@ -130,27 +135,52 @@ export function GlaucoChat() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/glauco/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Helper con timeout de 25s para evitar que el navegador cuelgue indefinidamente
+      const fetchWithTimeout = async (
+        body: Record<string, unknown>,
+        timeoutMs = 25000,
+      ): Promise<Response> => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch("/api/glauco/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          return res;
+        } catch (err) {
+          clearTimeout(timeoutId);
+          throw err;
+        }
+      };
+
+      let res: Response;
+      try {
+        res = await fetchWithTimeout({
           message: content,
           sessionId,
           useWeb: true,
-        }),
-      });
+        });
+      } catch (fetchErr) {
+        // Si el primer fetch falla (timeout/abort/red), reintenta sin web search
+        console.warn("[Glauco] Primer fetch falló, reintentando sin web search:", fetchErr);
+        res = await fetchWithTimeout({
+          message: content,
+          sessionId,
+          useWeb: false,
+        });
+      }
 
       if (!res.ok) {
-        // Reintento sin web search si falla (servidor posiblemente con problemas de red)
+        // Reintento sin web search si el servidor devuelve 5xx
         if (res.status >= 500) {
-          const retryRes = await fetch("/api/glauco/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: content,
-              sessionId,
-              useWeb: false,
-            }),
+          const retryRes = await fetchWithTimeout({
+            message: content,
+            sessionId,
+            useWeb: false,
           });
           if (retryRes.ok) {
             const data = await retryRes.json();
