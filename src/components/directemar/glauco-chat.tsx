@@ -38,23 +38,23 @@ const SESSION_KEY = "glauco-session-id";
 const SUGGESTED_PROMPTS = [
   {
     icon: BookOpen,
-    title: "Palabra para hoy",
-    prompt: "Dame un salmo que sostenga el ánimo del operador de turno esta noche.",
-  },
-  {
-    icon: Wind,
-    title: "Estoy tenso",
-    prompt: "He tenido un turno difícil con varias alertas críticas. Ayúdame a bajar el estrés.",
+    title: "Saludo de turno",
+    prompt: "Hola Glauco, estoy iniciando el turno. ¿Cómo vas?",
   },
   {
     icon: Waves,
-    title: "Estado del litoral",
-    prompt: "¿Cuál es el estado actual del puerto de Punta Arenas y las condiciones de viento?",
+    title: "Consulta operativa",
+    prompt: "¿Qué normativa regula la restricción de calado en Puerto Montt?",
+  },
+  {
+    icon: Wind,
+    title: "Turno difícil",
+    prompt: "He tenido varias alertas críticas hoy. Ayúdame a bajar el estrés.",
   },
   {
     icon: Heart,
-    title: "Orar por mi equipo",
-    prompt: "Oremos por la tripulación del remolcador que sale esta madrugada.",
+    title: "Acompañamiento espiritual",
+    prompt: "Dame un salmo que sostenga el ánimo de mi equipo esta noche.",
   },
 ];
 
@@ -166,7 +166,7 @@ export function GlaucoChat() {
         id: `e-${Date.now()}`,
         role: "assistant",
         content:
-          "La paz contigo. No he podido conectar con el mar de datos en este instante. ¿Quieres intentarlo nuevamente? Mientras tanto, recuerda: *«Tú guardas en perfecta paz aquel cuyo pensamiento se mantiene en ti»* (Isaías 26:3).",
+          "Compañero, tuve un problema técnico procesando tu mensaje. ¿Puedes repetirlo? Si persiste, avísame y derivamos al equipo de soporte.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errMsg]);
@@ -301,8 +301,8 @@ export function GlaucoChat() {
           {/* Footer controls */}
           <div className="px-3 py-2 border-t border-border bg-card/80 backdrop-blur-sm flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-              <Globe className="h-3 w-3 text-accent" />
-              <span>Con internet · Biblia AT/NT</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 pulse-dot" />
+              <span>Glauco activo · Capellanía y operación marítima</span>
             </div>
             {messages.length > 0 && (
               <Button
