@@ -628,6 +628,13 @@ function TacticalMap({
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
+          <filter id="vtsGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.6" result="coloredBlur" />
+            <feMerge>
+              <feMergeNode in="coloredBlur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
           <pattern id="radarGrid" x="0" y="0" width="5" height="5" patternUnits="userSpaceOnUse">
             <path d="M 5 0 L 0 0 0 5" fill="none" stroke="#1a3a5c" strokeWidth="0.08" opacity="0.4" />
           </pattern>
@@ -638,28 +645,150 @@ function TacticalMap({
             <stop offset="0%" stopColor="#3e848a" stopOpacity="0" />
             <stop offset="100%" stopColor="#3e848a" stopOpacity="0.18" />
           </linearGradient>
+          <linearGradient id="vtsFill" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#3e848a" stopOpacity="0.06" />
+            <stop offset="100%" stopColor="#3e848a" stopOpacity="0.02" />
+          </linearGradient>
         </defs>
 
+        {/* Fondo con grids */}
         <rect x="0" y="0" width="100" height="130" fill="url(#radarGrid)" />
         <rect x="0" y="0" width="100" height="130" fill="url(#radarGridMajor)" />
 
-        {[10, 20, 30, 40].map((r) => (
-          <circle
-            key={r}
-            cx={50}
-            cy={65}
-            r={r}
-            fill="none"
-            stroke="#2a5a8c"
-            strokeWidth="0.1"
-            strokeDasharray="0.5 0.8"
-            opacity="0.5"
-          />
+        {/* === RNG (Range Rings) — anillos de distancia con etiquetas === */}
+        {[8, 16, 24, 32, 40].map((r) => (
+          <g key={`rng-${r}`}>
+            <circle
+              cx={50}
+              cy={65}
+              r={r}
+              fill="none"
+              stroke="#2a5a8c"
+              strokeWidth="0.1"
+              strokeDasharray="0.5 0.8"
+              opacity="0.6"
+            />
+            {/* Etiqueta de distancia RNG */}
+            <text
+              x={50 + r + 0.5}
+              y={65 + 0.4}
+              fontSize="1.2"
+              fill="#5dd5e0"
+              opacity="0.7"
+              fontFamily="monospace"
+              fontWeight="600"
+            >
+              {Math.round(r * 2.5)}NM
+            </text>
+          </g>
         ))}
 
+        {/* === BRG (Bearing lines) — líneas de azimut cada 30° === */}
+        {Array.from({ length: 12 }).map((_, i) => {
+          const angle = i * 30;
+          const rad = (angle * Math.PI) / 180;
+          const len = 42;
+          const ex = 50 + Math.sin(rad) * len;
+          const ey = 65 - Math.cos(rad) * len;
+          return (
+            <g key={`brg-${angle}`}>
+              <line
+                x1={50}
+                y1={65}
+                x2={ex}
+                y2={ey}
+                stroke="#2a5a8c"
+                strokeWidth="0.06"
+                opacity="0.35"
+                strokeDasharray="0.3 0.5"
+              />
+              {/* Etiqueta BRG en grados */}
+              <text
+                x={50 + Math.sin(rad) * (len + 2.5)}
+                y={65 - Math.cos(rad) * (len + 2.5) + 0.4}
+                fontSize="1"
+                fill="#5dd5e0"
+                opacity="0.6"
+                fontFamily="monospace"
+                textAnchor="middle"
+                fontWeight="600"
+              >
+                {String(angle).padStart(3, "0")}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Cross-hair central */}
         <line x1="0" y1="65" x2="100" y2="65" stroke="#2a5a8c" strokeWidth="0.08" strokeDasharray="0.4 0.6" opacity="0.4" />
         <line x1="50" y1="0" x2="50" y2="130" stroke="#2a5a8c" strokeWidth="0.08" strokeDasharray="0.4 0.6" opacity="0.4" />
 
+        {/* === Zona VTS dibujada (sector de vigilancia) === */}
+        <g filter="url(#vtsGlow)">
+          {/* Sector VTS — polígono cubriendo el litoral chileno */}
+          <path
+            d="M 70 5 L 30 5 L 25 30 L 22 55 L 24 80 L 22 110 L 28 125 L 70 125 L 78 95 L 75 65 L 78 35 Z"
+            fill="url(#vtsFill)"
+            stroke="#3e848a"
+            strokeWidth="0.3"
+            strokeDasharray="0.8 0.4"
+            opacity="0.7"
+          />
+          {/* Etiqueta VTS zona */}
+          <text
+            x={48}
+            y={20}
+            fontSize="1.5"
+            fill="#3e848a"
+            opacity="0.85"
+            fontFamily="monospace"
+            fontWeight="700"
+            textAnchor="middle"
+          >
+            VTS · ZONA CONTROL
+          </text>
+          {/* Marca de límite VTS Norte */}
+          <text
+            x={28}
+            y={8}
+            fontSize="0.9"
+            fill="#5dd5e0"
+            opacity="0.7"
+            fontFamily="monospace"
+            fontWeight="600"
+          >
+            ◀ VTS-N
+          </text>
+          {/* Marca de límite VTS Sur */}
+          <text
+            x={28}
+            y={123}
+            fontSize="0.9"
+            fill="#5dd5e0"
+            opacity="0.7"
+            fontFamily="monospace"
+            fontWeight="600"
+          >
+            ◀ VTS-S
+          </text>
+        </g>
+
+        {/* Costa — tierra */}
+        <path
+          d="M 75 5 L 65 15 L 55 25 L 50 35 L 48 45 L 50 55 L 52 65 L 50 75 L 48 85 L 50 95 L 55 105 L 50 115 L 45 125 L 100 125 L 100 5 Z"
+          fill="#1a2a3a"
+          stroke="#0a1525"
+          strokeWidth="0.1"
+        />
+        <path
+          d="M 75 5 L 65 15 L 55 25 L 50 35 L 48 45 L 50 55 L 52 65 L 50 75 L 48 85 L 50 95 L 55 105 L 50 115 L 45 125"
+          fill="none"
+          stroke="#3e848a"
+          strokeWidth="0.25"
+          opacity="0.8"
+        />
+
+        {/* === Radar sweep animado === */}
         <g style={{ transformOrigin: "50px 65px" }}>
           <g>
             <animateTransform
@@ -679,26 +808,13 @@ function TacticalMap({
           </g>
         </g>
 
+        {/* ZEE — Zona Económica Exclusiva */}
         <path
           d="M 75 5 L 30 5 L 30 125 L 45 125 L 50 115 L 55 105 L 50 95 L 48 85 L 50 75 L 52 65 L 50 55 L 48 45 L 50 35 L 55 25 L 65 15 L 75 5 Z"
           fill="oklch(0.62 0.13 185 / 0.05)"
           stroke="oklch(0.62 0.13 185 / 0.55)"
           strokeWidth="0.25"
           strokeDasharray="1.2 0.8"
-        />
-
-        <path
-          d="M 75 5 L 65 15 L 55 25 L 50 35 L 48 45 L 50 55 L 52 65 L 50 75 L 48 85 L 50 95 L 55 105 L 50 115 L 45 125 L 100 125 L 100 5 Z"
-          fill="#1a2a3a"
-          stroke="#0a1525"
-          strokeWidth="0.1"
-        />
-        <path
-          d="M 75 5 L 65 15 L 55 25 L 50 35 L 48 45 L 50 55 L 52 65 L 50 75 L 48 85 L 50 95 L 55 105 L 50 115 L 45 125"
-          fill="none"
-          stroke="#3e848a"
-          strokeWidth="0.25"
-          opacity="0.8"
         />
 
         {PORTS.map((port) => {
@@ -744,10 +860,29 @@ function TacticalMap({
           const isHigh = v.risk === "high";
           const sizeFactor = 1 / zoom;
 
+          // VEC (Velocity Vector) — vector de velocidad con longitud proporcional al SOG
+          // Estilo militar: línea sólida + punta de flecha + tiempo de proyección
           const rad = (v.cogDeg * Math.PI) / 180;
-          const arrowLen = (v.sogKn > 0 ? 2 : 0) * (zoom > 1.5 ? 1.2 : 1);
-          const ax = x + Math.sin(rad) * arrowLen;
-          const ay = y - Math.cos(rad) * arrowLen;
+          const vecLength = v.sogKn > 0 ? Math.max(1.5, v.sogKn * 0.18) * (zoom > 1.5 ? 1.2 : 1) : 0;
+          const vecX = x + Math.sin(rad) * vecLength;
+          const vecY = y - Math.cos(rad) * vecLength;
+          // Punta de flecha del VEC
+          const arrowSize = 0.5 * sizeFactor;
+          const arrowAngle1 = (v.cogDeg + 35) * Math.PI / 180;
+          const arrowAngle2 = (v.cogDeg - 35) * Math.PI / 180;
+          const a1x = vecX - Math.sin(arrowAngle1) * arrowSize * 2;
+          const a1y = vecY + Math.cos(arrowAngle1) * arrowSize * 2;
+          const a2x = vecX - Math.sin(arrowAngle2) * arrowSize * 2;
+          const a2y = vecY + Math.cos(arrowAngle2) * arrowSize * 2;
+
+          // TRK (Track label) — bloque de texto compacto con datos del track
+          const showTrackLabel = showLabels || isHovered || isSelected || isHigh || zoom > 1.8;
+
+          // Bearing desde el centro del radar al buque (para BRG label)
+          const dx = x - 50;
+          const dy = 65 - y;
+          const bearing = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+          const range = Math.sqrt(dx * dx + dy * dy);
 
           return (
             <g
@@ -761,6 +896,18 @@ function TacticalMap({
               onMouseLeave={() => setHovered(null)}
               filter={isSelected ? "url(#vesselGlow)" : undefined}
             >
+              {/* LIB (Limited Information Buffer) — halo tenue alrededor del target */}
+              {v.sogKn > 0 && (
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={1.5 * sizeFactor}
+                  fill={color}
+                  opacity="0.08"
+                />
+              )}
+
+              {/* Estela / TRK trail (track history) */}
               {showTrails && v.sogKn > 0 && (
                 <line
                   x1={x - Math.sin(rad) * 3}
@@ -769,70 +916,134 @@ function TacticalMap({
                   y2={y}
                   stroke={color}
                   strokeWidth={0.18 * sizeFactor}
-                  opacity="0.35"
+                  opacity="0.4"
                   strokeDasharray="0.5 0.4"
                 />
               )}
 
+              {/* Selection ring (animado) */}
               {isSelected && (
-                <circle cx={x} cy={y} r={2.5 * sizeFactor} fill="none" stroke="#3e848a" strokeWidth={0.35 * sizeFactor}>
+                <circle cx={x} cy={y} r={2.5 * sizeFactor} fill="none" stroke="#5dd5e0" strokeWidth={0.4 * sizeFactor}>
                   <animate attributeName="r" values={`${1.5 * sizeFactor};${3.5 * sizeFactor};${1.5 * sizeFactor}`} dur="1.5s" repeatCount="indefinite" />
                 </circle>
               )}
 
+              {/* Hover ring */}
               {isHovered && !isSelected && (
                 <circle cx={x} cy={y} r={2 * sizeFactor} fill="none" stroke="#c9d1d9" strokeWidth={0.2 * sizeFactor} opacity="0.6" />
               )}
 
+              {/* High risk pulse (rojo) */}
               {isHigh && (
                 <circle cx={x} cy={y} r={1.8 * sizeFactor} fill="#f85149" opacity="0.35">
                   <animate attributeName="r" values={`${1 * sizeFactor};${3 * sizeFactor};${1 * sizeFactor}`} dur="1.5s" repeatCount="indefinite" />
                 </circle>
               )}
 
+              {/* === VEC (Velocity Vector) — vector de velocidad militar === */}
               {v.sogKn > 0 && (
-                <line
-                  x1={x}
-                  y1={y}
-                  x2={ax}
-                  y2={ay}
-                  stroke={color}
-                  strokeWidth={0.3 * sizeFactor}
-                  opacity="0.9"
-                />
+                <g>
+                  {/* Línea principal del vector */}
+                  <line
+                    x1={x}
+                    y1={y}
+                    x2={vecX}
+                    y2={vecY}
+                    stroke={isHigh ? "#f85149" : "#5dd5e0"}
+                    strokeWidth={0.35 * sizeFactor}
+                    opacity="0.85"
+                  />
+                  {/* Punta de flecha del VEC */}
+                  <polygon
+                    points={`${vecX},${vecY} ${a1x},${a1y} ${a2x},${a2y}`}
+                    fill={isHigh ? "#f85149" : "#5dd5e0"}
+                    opacity="0.9"
+                  />
+                  {/* Tick marks cada 6 minutos de proyección (estilo radar militar) */}
+                  {[0.33, 0.66].map((t) => (
+                    <line
+                      key={t}
+                      x1={x + Math.sin(rad) * vecLength * t - Math.cos(rad) * 0.3 * sizeFactor}
+                      y1={y - Math.cos(rad) * vecLength * t - Math.sin(rad) * 0.3 * sizeFactor}
+                      x2={x + Math.sin(rad) * vecLength * t + Math.cos(rad) * 0.3 * sizeFactor}
+                      y2={y - Math.cos(rad) * vecLength * t + Math.sin(rad) * 0.3 * sizeFactor}
+                      stroke={isHigh ? "#f85149" : "#5dd5e0"}
+                      strokeWidth={0.15 * sizeFactor}
+                      opacity="0.6"
+                    />
+                  ))}
+                </g>
               )}
 
+              {/* Marcador del buque — triángulo orientado por COG */}
               <polygon
-                points={`0,${-1 * sizeFactor} ${-0.6 * sizeFactor},${0.6 * sizeFactor} ${0.6 * sizeFactor},${0.6 * sizeFactor}`}
+                points={`0,${-1.2 * sizeFactor} ${-0.7 * sizeFactor},${0.7 * sizeFactor} ${0.7 * sizeFactor},${0.7 * sizeFactor}`}
                 fill={color}
                 stroke={isSelected ? "#ffffff" : "#0a1525"}
                 strokeWidth={(isSelected ? 0.25 : 0.12) * sizeFactor}
                 transform={`translate(${x} ${y}) rotate(${v.cogDeg})`}
               />
 
-              {(showLabels || isHovered || isSelected || isHigh) && (isSelected || isHovered || isHigh || zoom > 2) && (
-                <text
-                  x={x + 1.5 * sizeFactor}
-                  y={y - 0.8 * sizeFactor}
-                  fontSize={1.4 / zoom}
-                  fill={isHigh ? "#f85149" : "#e6edf3"}
-                  opacity="0.95"
-                  fontWeight="600"
-                  fontFamily="monospace"
-                >
-                  {v.name}
-                </text>
-              )}
-              {(isSelected || isHovered) && (
-                <text
-                  x={x + 1.5 * sizeFactor}
-                  y={y - 0.8 * sizeFactor + 1.6 / zoom}
-                  fontSize={1.1 / zoom}
-                  fill="#8b949e"
-                  fontFamily="monospace"
-                >
-                  {v.sogKn}kn · {v.cogDeg}°
-                </text>
+              {/* === TRK (Track Label) — bloque de datos tácticos === */}
+              {showTrackLabel && (isSelected || isHovered || isHigh || zoom > 1.8) && (
+                <g>
+                  {/* Conector al track label */}
+                  <line
+                    x1={x}
+                    y1={y}
+                    x2={x + 2 * sizeFactor}
+                    y2={y - 2 * sizeFactor}
+                    stroke={isHigh ? "#f85149" : "#5dd5e0"}
+                    strokeWidth={0.15 * sizeFactor}
+                    opacity="0.6"
+                  />
+                  {/* Caja del track label */}
+                  <rect
+                    x={x + 2 * sizeFactor}
+                    y={y - 3.5 * sizeFactor}
+                    width={showLabels ? 14 / zoom : 11 / zoom}
+                    height={3.5 * sizeFactor}
+                    fill="#000000"
+                    opacity="0.7"
+                    stroke={isHigh ? "#f85149" : color}
+                    strokeWidth={0.15 * sizeFactor}
+                    rx="0.2"
+                  />
+                  {/* Nombre del buque */}
+                  <text
+                    x={x + 2.3 * sizeFactor}
+                    y={y - 2.2 * sizeFactor}
+                    fontSize={1.1 / zoom}
+                    fill={isHigh ? "#f85149" : "#ffffff"}
+                    fontFamily="monospace"
+                    fontWeight="700"
+                  >
+                    {v.name.slice(0, 14)}
+                  </text>
+                  {/* Datos: SOG · COG · BRG · RNG */}
+                  <text
+                    x={x + 2.3 * sizeFactor}
+                    y={y - 1.1 * sizeFactor}
+                    fontSize={0.9 / zoom}
+                    fill="#5dd5e0"
+                    fontFamily="monospace"
+                    fontWeight="600"
+                  >
+                    {v.sogKn}KN {String(v.cogDeg).padStart(3, "0")}°
+                  </text>
+                  {/* BRG y RNG desde el centro VTS */}
+                  {(isSelected || isHovered) && (
+                    <text
+                      x={x + 2.3 * sizeFactor}
+                      y={y - 0.4 * sizeFactor}
+                      fontSize={0.85 / zoom}
+                      fill="#8b949e"
+                      fontFamily="monospace"
+                    >
+                      BRG {String(Math.round(bearing)).padStart(3, "0")}° RNG {Math.round(range * 2.5)}NM
+                    </text>
+                  )}
+                </g>
               )}
             </g>
           );
@@ -902,6 +1113,40 @@ function TacticalMap({
               <span className="text-[8px] text-cyan-100/90 font-mono">{VESSEL_TYPE_LABELS[type as Vessel["type"]]}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* === Leyenda militar: RNG / BRG / VEC / TRK / LIB === */}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm rounded-md px-3 py-1.5 border border-cyan-500/30 hidden md:block">
+        <div className="text-[8px] text-cyan-400/70 font-mono uppercase tracking-wider mb-1 text-center">Anotaciones Tácticas</div>
+        <div className="flex items-center gap-3 text-[9px] font-mono">
+          <span className="flex items-center gap-1 text-cyan-300">
+            <span className="inline-block w-3 h-3 rounded-full border border-dashed border-cyan-400/60" />
+            <span><strong className="text-white">RNG</strong> Range</span>
+          </span>
+          <span className="text-cyan-500/40">·</span>
+          <span className="flex items-center gap-1 text-cyan-300">
+            <span className="inline-block w-3 h-px bg-cyan-400/60" style={{ transform: "rotate(30deg)" }} />
+            <span><strong className="text-white">BRG</strong> Bearing</span>
+          </span>
+          <span className="text-cyan-500/40">·</span>
+          <span className="flex items-center gap-1 text-cyan-300">
+            <span className="inline-block w-3 h-2" style={{
+              background: "linear-gradient(90deg, transparent 0%, #5dd5e0 100%)",
+              clipPath: "polygon(0 40%, 80% 40%, 100% 50%, 80% 60%, 0 60%)",
+            }} />
+            <span><strong className="text-white">VEC</strong> Vector</span>
+          </span>
+          <span className="text-cyan-500/40">·</span>
+          <span className="flex items-center gap-1 text-cyan-300">
+            <span className="inline-block w-2.5 h-2 border border-cyan-400 bg-black/60" />
+            <span><strong className="text-white">TRK</strong> Track</span>
+          </span>
+          <span className="text-cyan-500/40">·</span>
+          <span className="flex items-center gap-1 text-cyan-300">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-cyan-400/15" />
+            <span><strong className="text-white">LIB</strong> Buffer</span>
+          </span>
         </div>
       </div>
 
