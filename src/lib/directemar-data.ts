@@ -193,6 +193,177 @@ export interface NormaItem {
   resumen: string;
 }
 
+// =====================================================================
+// CÁMARAS CCTV — Integrador de cámaras (componente del subtítulo oficial)
+// Cada cámara tiene posición, puerto monitoreado y tipo de feed.
+// =====================================================================
+
+export interface Camara {
+  id: string;            // CAM-01, CAM-02...
+  name: string;          // Nombre operativo
+  port: string;          // Puerto monitoreado
+  zonaMaritima: string;  // Código ZM-x
+  lat: number;
+  lng: number;
+  fov: number;            // Field of view en grados
+  heading: number;        // Orientación de la cámara (azimut grados)
+  zoom: number;           // Zoom óptico (x)
+  status: "online" | "offline" | "recording" | "ptz-tracking";
+  resolution: string;     // 4K, 1080p, 720p
+  fps: number;
+  irNight: boolean;       // Visión nocturna
+  type: "Fija" | "PTZ" | "Termográfica" | "Multi-sensor";
+  tracking?: string | null; // Si está trackeando un buque, su MMSI
+  lastMotion?: string;     // Última detección de movimiento
+}
+
+export const CAMARAS: Camara[] = [
+  {
+    id: "CAM-01",
+    name: "Espigón Norte VAP",
+    port: "Valparaíso",
+    zonaMaritima: "ZM-1",
+    lat: -33.0458,
+    lng: -71.6267,
+    fov: 60,
+    heading: 270,
+    zoom: 12,
+    status: "ptz-tracking",
+    resolution: "4K",
+    fps: 30,
+    irNight: true,
+    type: "PTZ",
+    tracking: "725123456",
+    lastMotion: "Buque en aproximación detectado",
+  },
+  {
+    id: "CAM-02",
+    name: "Sitio 4 ESPB",
+    port: "Valparaíso",
+    zonaMaritima: "ZM-1",
+    lat: -33.0462,
+    lng: -71.6270,
+    fov: 45,
+    heading: 180,
+    zoom: 8,
+    status: "recording",
+    resolution: "4K",
+    fps: 30,
+    irNight: true,
+    type: "Fija",
+    tracking: null,
+    lastMotion: "Maniobra de atraque",
+  },
+  {
+    id: "CAM-03",
+    name: "Boya de Canales SAI",
+    port: "San Antonio",
+    zonaMaritima: "ZM-1",
+    lat: -33.5936,
+    lng: -71.6106,
+    fov: 90,
+    heading: 90,
+    zoom: 6,
+    status: "online",
+    resolution: "1080p",
+    fps: 25,
+    irNight: false,
+    type: "Multi-sensor",
+    tracking: null,
+    lastMotion: "Tránsito normal",
+  },
+  {
+    id: "CAM-04",
+    name: "Bahía Talcahuano",
+    port: "Concepción — Talcahuano",
+    zonaMaritima: "ZM-2",
+    lat: -36.7054,
+    lng: -73.1167,
+    fov: 70,
+    heading: 45,
+    zoom: 10,
+    status: "ptz-tracking",
+    resolution: "4K",
+    fps: 30,
+    irNight: true,
+    type: "PTZ",
+    tracking: "725456789",
+    lastMotion: "Intrusión zona prohibida",
+  },
+  {
+    id: "CAM-05",
+    name: "Canal Tenglo PMO",
+    port: "Puerto Montt",
+    zonaMaritima: "ZM-3",
+    lat: -41.4706,
+    lng: -72.9422,
+    fov: 55,
+    heading: 200,
+    zoom: 14,
+    status: "recording",
+    resolution: "4K",
+    fps: 30,
+    irNight: true,
+    type: "Termográfica",
+    tracking: null,
+    lastMotion: "Restricción de calado activa",
+  },
+  {
+    id: "CAM-06",
+    name: "Estrecho Magallanes",
+    port: "Punta Arenas",
+    zonaMaritima: "ZM-4",
+    lat: -53.1633,
+    lng: -70.9178,
+    fov: 80,
+    heading: 135,
+    zoom: 9,
+    status: "online",
+    resolution: "1080p",
+    fps: 25,
+    irNight: false,
+    type: "Fija",
+    tracking: null,
+    lastMotion: "Viento 32kn — estabilización activa",
+  },
+  {
+    id: "CAM-07",
+    name: "Molo de Abrigo IQE",
+    port: "Iquique",
+    zonaMaritima: "ZM-5",
+    lat: -20.2133,
+    lng: -70.1506,
+    fov: 50,
+    heading: 315,
+    zoom: 11,
+    status: "online",
+    resolution: "4K",
+    fps: 30,
+    irNight: true,
+    type: "PTZ",
+    tracking: null,
+    lastMotion: "Operación normal",
+  },
+  {
+    id: "CAM-08",
+    name: "Bahía Castro",
+    port: "Castro — Chiloé",
+    zonaMaritima: "ZM-3",
+    lat: -42.4667,
+    lng: -73.7667,
+    fov: 65,
+    heading: 180,
+    zoom: 7,
+    status: "offline",
+    resolution: "1080p",
+    fps: 25,
+    irNight: false,
+    type: "Fija",
+    tracking: null,
+    lastMotion: "Cámara offline — tormenta",
+  },
+];
+
 export const PORTS: Port[] = [
   { code: "CLVAP", name: "Valparaíso", region: "Valparaíso", lat: -33.0458, lng: -71.6267, status: "open", windKn: 12, waveM: 1.2, visibilityNm: 10, lastUpdate: "hace 4 min" },
   { code: "CLSAI", name: "San Antonio", region: "Valparaíso", lat: -33.5936, lng: -71.6106, status: "open", windKn: 14, waveM: 1.5, visibilityNm: 9, lastUpdate: "hace 6 min" },

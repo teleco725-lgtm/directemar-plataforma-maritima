@@ -33,11 +33,13 @@ import {
   moveVessel,
   INITIAL_ALERTS,
   PORTS,
+  CAMARAS,
   ZONAS_MARITIMAS,
   ALL_REGIONS_FILTER,
   fmtTime,
   type Vessel,
   type MaritimeAlert,
+  type Camara,
 } from "@/lib/directemar-data";
 import { RegionFilter } from "@/components/directemar/region-filter";
 
@@ -160,15 +162,43 @@ export function OperacionVTS() {
             <Crosshair className="h-3.5 w-3.5" />
             Estelas
           </Button>
-          <Button
-            variant={showPalette ? "default" : "outline"}
-            size="sm"
-            className="gap-1.5"
+          {/* Selector Paleta — estilo toggle compacto (círculo + icono) */}
+          <button
             onClick={() => setShowPalette((v) => !v)}
+            aria-label="Alternar paleta de colores"
+            aria-pressed={showPalette}
+            className={cn(
+              "h-9 w-auto flex items-center gap-2 pl-1 pr-3 rounded-md border transition-all",
+              showPalette
+                ? "border-accent bg-accent/10 shadow-sm"
+                : "border-border hover:border-accent/50 hover:bg-muted/30",
+            )}
           >
-            <Palette className="h-3.5 w-3.5" />
-            Paleta
-          </Button>
+            {/* Círculo de color sólido (estado activo) */}
+            <span
+              className={cn(
+                "h-7 w-7 rounded-full flex items-center justify-center transition-all",
+                showPalette ? "scale-110" : "scale-100",
+              )}
+              style={{
+                background: showPalette
+                  ? "radial-gradient(circle at 30% 30%, #5dd5e0, #1a3a5c 70%)"
+                  : "radial-gradient(circle at 30% 30%, #4a5a6c, #1a1a1a 70%)",
+                boxShadow: showPalette ? "0 0 8px rgba(62, 132, 138, 0.5)" : "none",
+              }}
+            />
+            {/* Icono paleta outline */}
+            <Palette
+              className={cn(
+                "h-4 w-4 transition-colors",
+                showPalette ? "text-accent" : "text-muted-foreground",
+              )}
+              strokeWidth={1.5}
+            />
+            <span className={cn("text-xs font-medium", showPalette ? "text-accent" : "text-muted-foreground")}>
+              Paleta
+            </span>
+          </button>
         </div>
       </div>
 
@@ -286,6 +316,13 @@ export function OperacionVTS() {
           </CardContent>
         </Card>
       </div>
+
+      {/* CCTV integrator panel */}
+      <CctvPanel
+        vessels={filtered}
+        selectedMmsi={selectedMmsi}
+        zonaFilter={zonaFilter}
+      />
 
       {/* Selected vessel + alerts + comms */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -919,6 +956,332 @@ function TacticalMap({
         }
       `}</style>
     </div>
+  );
+}
+
+// === CCTV Panel — Integrator of cameras synced with radar ===
+function CctvPanel({
+  vessels,
+  selectedMmsi,
+  zonaFilter,
+}: {
+  vessels: Vessel[];
+  selectedMmsi: string | null;
+  zonaFilter: string;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const [primaryCam, setPrimaryCam] = useState<string | null>(null);
+  const [tick, setTick] = useState(0);
+
+  // Tick for simulated live feed indicators
+  useEffect(() => {
+    const i = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(i);
+  }, []);
+
+  // Filter cameras by zone
+  const camaras = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return CAMARAS;
+    return CAMARAS.filter((c) => c.zonaMaritima === zonaFilter);
+  }, [zonaFilter]);
+
+  // Selected vessel for tracking
+  const selectedVessel = vessels.find((v) => v.mmsi === selectedMmsi);
+
+  // When a vessel is selected, find the closest camera and mark as tracking
+  const trackingCams = useMemo(() => {
+    if (!selectedVessel) return new Set<string>();
+    const nearby = camaras
+      .filter((c) => c.status !== "offline")
+      .map((c) => ({
+        cam: c,
+        dist: Math.sqrt(
+          Math.pow(c.lat - selectedVessel.lat, 2) +
+            Math.pow(c.lng - selectedVessel.lng, 2),
+        ),
+      }))
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, 2);
+    return new Set(nearby.map((n) => n.cam.id));
+  }, [selectedVessel, camaras]);
+
+  const online = camaras.filter((c) => c.status !== "offline").length;
+  const offline = camaras.filter((c) => c.status === "offline").length;
+  const recording = camaras.filter((c) => c.status === "recording").length;
+  const ptzTracking = camaras.filter((c) => c.status === "ptz-tracking" || trackingCams.has(c.id)).length;
+
+  const now = new Date();
+  const timestamp = now.toLocaleString("es-CL", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+
+  return (
+    <Card className="border-cyan-500/30 bg-black">
+      <CardHeader className="pb-3 border-b border-cyan-500/20 bg-gradient-to-r from-[#0a1929] to-[#050d18]">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Video className="h-4 w-4 text-cyan-400" />
+              <span className="text-sm font-bold text-cyan-400 tracking-wide font-mono">
+                CCTV · INTEGRADOR DE CÁMARAS
+              </span>
+            </div>
+            <Badge variant="outline" className="text-[10px] font-mono-tabular bg-cyan-500/10 border-cyan-500/30 text-cyan-300">
+              {camaras.length} cámaras
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 text-[10px] font-mono">
+              <span className="flex items-center gap-1 text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-dot" />
+                {online} ONLINE
+              </span>
+              <span className="flex items-center gap-1 text-amber-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 pulse-dot" />
+                {recording} REC
+              </span>
+              <span className="flex items-center gap-1 text-cyan-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 pulse-dot" />
+                {ptzTracking} PTZ
+              </span>
+              {offline > 0 && (
+                <span className="flex items-center gap-1 text-destructive">
+                  <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                  {offline} OFF
+                </span>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setExpanded((v) => !v)}
+              className="text-cyan-400 hover:bg-cyan-500/10 text-xs"
+            >
+              {expanded ? "Contraer" : "Expandir"}
+            </Button>
+          </div>
+        </div>
+        <div className="text-[10px] font-mono text-cyan-400/60 mt-1">
+          {timestamp} · Sincronizado con radar táctico · IALA V-103
+          {selectedVessel && (
+            <span className="text-cyan-300 ml-2">
+              · Trackeando: <strong>{selectedVessel.name}</strong> (MMSI {selectedVessel.mmsi})
+            </span>
+          )}
+        </div>
+      </CardHeader>
+      {expanded && (
+        <CardContent className="p-3 space-y-3 bg-[#020608]">
+          {/* Grid 2x4 (8 cámaras) o 2x2 si hay pocas */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            {camaras.map((cam) => (
+              <CameraFeed
+                key={cam.id}
+                cam={cam}
+                vessel={selectedVessel}
+                isTracking={trackingCams.has(cam.id)}
+                isPrimary={primaryCam === cam.id}
+                onSelect={() => setPrimaryCam(primaryCam === cam.id ? null : cam.id)}
+                tick={tick}
+              />
+            ))}
+          </div>
+
+          {/* Bottom bar: camera info */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-2 border-t border-cyan-500/20">
+            <div className="bg-[#0a1929] rounded p-2 border border-cyan-500/20">
+              <div className="text-[9px] uppercase tracking-wider text-cyan-400/60 font-mono mb-1">Resolución promedio</div>
+              <div className="text-xs font-mono font-bold text-cyan-300">4K · 30 FPS</div>
+            </div>
+            <div className="bg-[#0a1929] rounded p-2 border border-cyan-500/20">
+              <div className="text-[9px] uppercase tracking-wider text-cyan-400/60 font-mono mb-1">Latencia</div>
+              <div className="text-xs font-mono font-bold text-cyan-300">142 ms</div>
+            </div>
+            <div className="bg-[#0a1929] rounded p-2 border border-cyan-500/20">
+              <div className="text-[9px] uppercase tracking-wider text-cyan-400/60 font-mono mb-1">Almacenamiento</div>
+              <div className="text-xs font-mono font-bold text-cyan-300">7 días · 24/7</div>
+            </div>
+            <div className="bg-[#0a1929] rounded p-2 border border-cyan-500/20">
+              <div className="text-[9px] uppercase tracking-wider text-cyan-400/60 font-mono mb-1">Visión nocturna IR</div>
+              <div className="text-xs font-mono font-bold text-cyan-300">
+                {camaras.filter((c) => c.irNight).length}/{camaras.length} activas
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+function CameraFeed({
+  cam,
+  vessel,
+  isTracking,
+  isPrimary,
+  onSelect,
+  tick,
+}: {
+  cam: Camara;
+  vessel?: Vessel;
+  isTracking: boolean;
+  isPrimary: boolean;
+  onSelect: () => void;
+  tick: number;
+}) {
+  const isOffline = cam.status === "offline";
+  const isRecording = cam.status === "recording" || (isTracking && !isOffline);
+  const showIr = isOffline ? false : (new Date().getHours() >= 19 || new Date().getHours() < 6) && cam.irNight;
+
+  // Simular buque visible en feed cuando trackea
+  const showVesselInFeed = isTracking && vessel;
+
+  return (
+    <button
+      onClick={onSelect}
+      className={cn(
+        "relative aspect-video rounded overflow-hidden border transition-all text-left",
+        isOffline
+          ? "border-destructive/40 bg-[#0a0a0a]"
+          : isPrimary
+          ? "border-accent ring-2 ring-accent/40 bg-[#0a1929]"
+          : isTracking
+          ? "border-amber-500/60 ring-1 ring-amber-500/30 bg-[#0a1929]"
+          : "border-cyan-500/20 hover:border-cyan-500/50 bg-[#0a1929]",
+      )}
+    >
+      {/* Simulated camera feed */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: isOffline
+            ? "repeating-linear-gradient(45deg, #1a1a1a, #1a1a1a 4px, #0a0a0a 4px, #0a0a0a 8px)"
+            : showIr
+            ? "radial-gradient(circle at 50% 50%, rgba(255,200,100,0.15), rgba(0,0,0,0.9) 80%)"
+            : "linear-gradient(180deg, #1a3a5c 0%, #0a1929 50%, #020608 100%)",
+        }}
+      />
+
+      {/* Water surface simulation (when not offline) */}
+      {!isOffline && (
+        <div className="absolute inset-0 opacity-30">
+          <div
+            className="absolute inset-x-0 bottom-0 h-1/2"
+            style={{
+              background: "repeating-linear-gradient(0deg, transparent 0, transparent 2px, rgba(62, 132, 138, 0.15) 2px, rgba(62, 132, 138, 0.15) 3px)",
+              animation: `water-${cam.id} ${3 + (parseInt(cam.id.slice(-1)) % 3)}s ease-in-out infinite`,
+            }}
+          />
+          <style>{`
+            @keyframes water-${cam.id} {
+              0%, 100% { transform: translateY(0); }
+              50% { transform: translateY(-2px); }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* Vessel marker in feed when tracking */}
+      {showVesselInFeed && (
+        <div className="absolute" style={{ left: "30%", top: "45%" }}>
+          <div className="relative">
+            {/* Crosshair tracking */}
+            <svg width="40" height="40" viewBox="0 0 40 40" className="absolute -inset-2">
+              <line x1="20" y1="0" x2="20" y2="14" stroke="#f59e0b" strokeWidth="1.5" />
+              <line x1="20" y1="26" x2="20" y2="40" stroke="#f59e0b" strokeWidth="1.5" />
+              <line x1="0" y1="20" x2="14" y2="20" stroke="#f59e0b" strokeWidth="1.5" />
+              <line x1="26" y1="20" x2="40" y2="20" stroke="#f59e0b" strokeWidth="1.5" />
+              <rect x="14" y="14" width="12" height="12" fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+            </svg>
+            {/* Vessel silhouette */}
+            <div
+              className="w-3 h-6 bg-cyan-300"
+              style={{ clipPath: "polygon(50% 0, 100% 100%, 0 100%)" }}
+            />
+            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] font-mono text-amber-400 whitespace-nowrap">
+              {vessel?.name.slice(0, 12)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scanlines overlay (CRT effect) */}
+      {!isOffline && (
+        <div
+          className="absolute inset-0 pointer-events-none opacity-10"
+          style={{
+            background: "repeating-linear-gradient(0deg, transparent 0, transparent 1px, rgba(255,255,255,0.3) 1px, rgba(255,255,255,0.3) 2px)",
+          }}
+        />
+      )}
+
+      {/* HUD overlay */}
+      <div className="absolute top-1 left-1 right-1 flex items-center justify-between text-[8px] font-mono">
+        <span className={cn(
+          "px-1 rounded font-bold",
+          isOffline ? "bg-destructive/30 text-destructive" : "bg-black/60 text-cyan-300",
+        )}>
+          {cam.id}
+        </span>
+        <span className={cn("font-bold", isOffline ? "text-destructive" : "text-cyan-300")}>
+          {cam.type}
+        </span>
+      </div>
+
+      <div className="absolute bottom-1 left-1 right-1 flex items-end justify-between text-[8px] font-mono">
+        <div className={cn(
+          "px-1 rounded max-w-[70%]",
+          isOffline ? "text-destructive" : "text-cyan-300 bg-black/60",
+        )}>
+          {cam.name}
+        </div>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className={cn("px-1 rounded bg-black/60", isOffline ? "text-destructive" : "text-cyan-300")}>
+            {cam.resolution}
+          </span>
+          {isRecording && (
+            <span className="flex items-center gap-0.5 px-1 rounded bg-red-900/60 text-red-400">
+              <span className="h-1 w-1 rounded-full bg-red-500 pulse-dot" />
+              REC
+            </span>
+          )}
+          {showIr && (
+            <span className="px-1 rounded bg-amber-900/40 text-amber-400">IR</span>
+          )}
+          {isTracking && (
+            <span className="flex items-center gap-0.5 px-1 rounded bg-amber-900/40 text-amber-400">
+              <Crosshair className="h-1.5 w-1.5" />
+              PTZ
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Live timestamp */}
+      {!isOffline && (
+        <div className="absolute top-1 right-1 mt-3 mr-1 text-[7px] font-mono text-cyan-400/70">
+          {new Date(Date.now() + tick * 1000).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+        </div>
+      )}
+
+      {/* Offline message */}
+      {isOffline && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-destructive text-[10px] font-bold font-mono mb-1">SEÑAL PERDIDA</div>
+            <div className="text-destructive/60 text-[8px] font-mono">{cam.lastMotion}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Primary indicator */}
+      {isPrimary && (
+        <div className="absolute top-1 left-1/2 -translate-x-1/2 mt-7 px-1.5 py-0.5 rounded bg-accent text-accent-foreground text-[8px] font-mono font-bold">
+          PRIMARIO
+        </div>
+      )}
+    </button>
   );
 }
 

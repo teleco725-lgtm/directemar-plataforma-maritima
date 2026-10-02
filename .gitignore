@@ -54,3 +54,6 @@ server.log
 /skills/
 # Screenshots and downloads
 /download/
+
+# Upload folder (user inputs)
+/upload/
