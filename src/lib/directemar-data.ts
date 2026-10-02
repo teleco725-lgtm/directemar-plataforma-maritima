@@ -354,13 +354,13 @@ export const CAMARAS: Camara[] = [
     fov: 65,
     heading: 180,
     zoom: 7,
-    status: "offline",
+    status: "online",
     resolution: "1080p",
     fps: 25,
     irNight: false,
     type: "Fija",
     tracking: null,
-    lastMotion: "Cámara offline — tormenta",
+    lastMotion: "Sistema restaurado · monitoreo activo",
   },
 ];
 
