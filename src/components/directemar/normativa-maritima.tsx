@@ -55,10 +55,10 @@ export function NormativaMaritima() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Book className="h-6 w-6 text-accent" />
-          Normativa Marítima
+          Gobernanza Marítima
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Compilación de marco normativo aplicable · Vigente al {fmtDate(new Date().toISOString())}
+          Marco de gobernanza normativo aplicable · Vigente al {fmtDate(new Date().toISOString())}
         </p>
       </div>
 

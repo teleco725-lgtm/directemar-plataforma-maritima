@@ -1,0 +1,10 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "installCommand": "bun install",
+  "devCommand": "next dev",
+  "regions": ["sfo1"],
+  "github": {
+    "silent": true
+  }
+}

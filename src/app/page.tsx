@@ -56,7 +56,7 @@ export default function Home() {
                   operacion: "Operación VTS",
                   bitacora: "Bitácora Auditante",
                   tramites: "Trámites y Logística",
-                  normativa: "Normativa Marítima",
+                  normativa: "Gobernanza Marítima",
                   datos: "Datos y Estadísticas",
                 }[activeSection]
               }

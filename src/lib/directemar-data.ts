@@ -552,7 +552,7 @@ export const NAV_SECTIONS = [
   { id: "operacion", label: "Operación VTS", short: "Operación", icon: "radar" },
   { id: "bitacora", label: "Bitácora Auditante", short: "Bitácora", icon: "shield" },
   { id: "tramites", label: "Trámites y Logística", short: "Trámites", icon: "file-text" },
-  { id: "normativa", label: "Normativa Marítima", short: "Normativa", icon: "book" },
+  { id: "normativa", label: "Gobernanza Marítima", short: "Gobernanza", icon: "book" },
   { id: "datos", label: "Datos y Estadísticas", short: "Datos", icon: "bar-chart" },
 ];
 
