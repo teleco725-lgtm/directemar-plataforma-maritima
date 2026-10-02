@@ -141,6 +141,32 @@ export function GlaucoChat() {
       });
 
       if (!res.ok) {
+        // Reintento sin web search si falla (servidor posiblemente con problemas de red)
+        if (res.status >= 500) {
+          const retryRes = await fetch("/api/glauco/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: content,
+              sessionId,
+              useWeb: false,
+            }),
+          });
+          if (retryRes.ok) {
+            const data = await retryRes.json();
+            const aiMsg: Message = {
+              id: `a-${Date.now()}`,
+              role: "assistant",
+              content: data.reply,
+              sources: data.sources,
+              mood: data.mood,
+              breathSuggested: data.breathSuggested,
+              timestamp: Date.now(),
+            };
+            setMessages((prev) => [...prev, aiMsg]);
+            return;
+          }
+        }
         throw new Error(`HTTP ${res.status}`);
       }
 
@@ -162,11 +188,12 @@ export function GlaucoChat() {
         );
       }
     } catch (err) {
+      console.error("[Glauco] Error en cliente:", err);
       const errMsg: Message = {
         id: `e-${Date.now()}`,
         role: "assistant",
         content:
-          "Compa, tuve un problema técnico procesando tu mensaje. ¿Puedes repetirlo? Si persiste, avísame y derivamos al equipo de soporte.",
+          "Compa, se me cortó la señal del lado del servidor. Ya me reinicié — intenta escribirme de nuevo, debería funcionar.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errMsg]);
