@@ -166,7 +166,7 @@ export function GlaucoChat() {
         id: `e-${Date.now()}`,
         role: "assistant",
         content:
-          "Compañero, tuve un problema técnico procesando tu mensaje. ¿Puedes repetirlo? Si persiste, avísame y derivamos al equipo de soporte.",
+          "Compa, tuve un problema técnico procesando tu mensaje. ¿Puedes repetirlo? Si persiste, avísame y derivamos al equipo de soporte.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errMsg]);

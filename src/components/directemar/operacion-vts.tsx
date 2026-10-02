@@ -211,8 +211,8 @@ export function OperacionVTS() {
       {/* Tactical view */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
         {/* Map */}
-        <Card className="xl:col-span-3 overflow-hidden border-naval-200 dark:border-naval-800">
-          <CardContent className="p-0">
+        <Card className="xl:col-span-3 overflow-hidden border-cyan-500/20 flex flex-col">
+          <CardContent className="p-0 flex-1">
             <TacticalMap
               vessels={filtered}
               selectedMmsi={selectedMmsi}
@@ -603,7 +603,7 @@ function TacticalMap({
 
   return (
     <div
-      className="relative aspect-[3/4] sm:aspect-[2/3] max-h-[680px] overflow-hidden select-none"
+      className="relative w-full h-[70vh] min-h-[500px] xl:h-[calc(100vh-220px)] overflow-hidden select-none"
       style={{
         background: "radial-gradient(ellipse at center, #0a1929 0%, #050d18 70%, #020608 100%)",
         cursor: isDragging ? "grabbing" : "crosshair",
@@ -1286,92 +1286,219 @@ function CameraFeed({
 }
 
 function ColorPalettePanel() {
-  const palettes: Array<{
-    title: string;
-    items: Array<{ label: string; color: string; description?: string }>;
+  // Temas cromáticos predefinidos estilo "DISEÑO VISUAL" de la imagen
+  const [selectedTheme, setSelectedTheme] = useState<string>("maritimo-profundo");
+
+  const themes: Array<{
+    id: string;
+    name: string;
+    description: string;
+    primary: string;
+    secondary: string;
+    accent: string;
+    bg: string;
   }> = [
     {
-      title: "Tipos de Buque",
-      items: [
-        { label: "Carga (Cargo)", color: VESSEL_COLORS.Cargo, description: "Buques mercantes portacontenedores, graneleros" },
-        { label: "Petrolero (Tanker)", color: VESSEL_COLORS.Tanker, description: "Carga líquida/peligrosa" },
-        { label: "Pesca (Fishing)", color: VESSEL_COLORS.Fishing, description: "Buques pesqueros industriales y artesanales" },
-        { label: "Pasajeros", color: VESSEL_COLORS.Passenger, description: "Cruceros, ferrys, transbordadores" },
-        { label: "Práctico (Pilot)", color: VESSEL_COLORS.Pilot, description: "Lanchas de prácticos de puerto" },
-        { label: "Remolcador (Tug)", color: VESSEL_COLORS.Tug, description: "Tugboats y asistencia portuaria" },
-        { label: "Naval", color: VESSEL_COLORS.Naval, description: "Unidades de la Armada" },
-      ],
+      id: "maritimo-profundo",
+      name: "Marítimo Profundo",
+      description: "Sobrio · Institucional · Armada",
+      primary: "#1A2B3A",
+      secondary: "#3E848A",
+      accent: "#5DD5E0",
+      bg: "#0A1929",
     },
     {
-      title: "Estado de Puerto",
-      items: [
-        { label: "Operativo", color: "#3fb950", description: "Puerto abierto a operaciones normales" },
-        { label: "Restringido", color: "#d29922", description: "Operaciones limitadas por condiciones" },
-        { label: "Cerrado", color: "#f85149", description: "Cierre temporal por alerta crítica" },
-      ],
+      id: "teal_operacional",
+      name: "Teal Operacional",
+      description: "Profesional · Confiable · VTS",
+      primary: "#0F3460",
+      secondary: "#3E848A",
+      accent: "#5DD5E0",
+      bg: "#051828",
     },
     {
-      title: "Severidad de Alerta",
-      items: [
-        { label: "Info", color: "#3e848a", description: "Información operativa rutinaria" },
-        { label: "Advertencia", color: "#d29922", description: "Requiere atención del operador" },
-        { label: "Crítica", color: "#f85149", description: "Intervención inmediata del Capitán de Puerto" },
-      ],
+      id: "cyan_radar",
+      name: "Cyan Radar",
+      description: "Tecnológico · Táctico · Nocturno",
+      primary: "#0D1B2A",
+      secondary: "#00B4D8",
+      accent: "#48CAE4",
+      bg: "#03070E",
     },
     {
-      title: "Nivel de Riesgo",
-      items: [
-        { label: "Bajo", color: "#3fb950", description: "Cumplimiento normativo completo" },
-        { label: "Medio", color: "#d29922", description: "Vigilancia reforzada" },
-        { label: "Alto", color: "#f85149", description: "Infracción o peligro inminente" },
-      ],
+      id: "verde_mar",
+      name: "Verde Mar",
+      description: "Natural · Sereno · Operativo",
+      primary: "#1B3A2F",
+      secondary: "#2D6A4F",
+      accent: "#52B788",
+      bg: "#081411",
     },
     {
-      title: "Rumbo Náutico (COG)",
-      items: [
-        { label: "Norte (000°)", color: "#58a6ff" },
-        { label: "Este (090°)", color: "#3fb950" },
-        { label: "Sur (180°)", color: "#f85149" },
-        { label: "Oeste (270°)", color: "#bc8cff" },
-      ],
+      id: "ambar_alerta",
+      name: "Ámbar Alerta",
+      description: "Cálido · Atención · Fiscalización",
+      primary: "#3D2817",
+      secondary: "#B47A2D",
+      accent: "#F4A261",
+      bg: "#1A0F05",
+    },
+    {
+      id: "grafito_ejecutivo",
+      name: "Grafito Ejecutivo",
+      description: "Neutro · Minimalista · Documentos",
+      primary: "#2D3142",
+      secondary: "#4F5D75",
+      accent: "#8E9AAF",
+      bg: "#0B0E14",
     },
   ];
 
+  // Paleta de referencia de colores operativos (informativa, siempre visible)
+  const operationalColors = [
+    { label: "Carga", color: VESSEL_COLORS.Cargo },
+    { label: "Petrolero", color: VESSEL_COLORS.Tanker },
+    { label: "Pesca", color: VESSEL_COLORS.Fishing },
+    { label: "Pasajeros", color: VESSEL_COLORS.Passenger },
+    { label: "Práctico", color: VESSEL_COLORS.Pilot },
+    { label: "Remolcador", color: VESSEL_COLORS.Tug },
+    { label: "Naval", color: VESSEL_COLORS.Naval },
+  ];
+
+  const statusColors = [
+    { label: "Operativo", color: "#3fb950" },
+    { label: "Restringido", color: "#d29922" },
+    { label: "Cerrado", color: "#f85149" },
+  ];
+
+  const selected = themes.find((t) => t.id === selectedTheme) || themes[0];
+
   return (
-    <Card className="border-accent/30 bg-accent/5">
-      <CardContent className="p-3">
-        <div className="flex items-center gap-2 mb-3">
+    <Card className="border-accent/20 overflow-hidden">
+      <CardContent className="p-0">
+        {/* Header del panel */}
+        <div className="flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-sidebar to-sidebar/90 border-b border-sidebar-border">
           <Palette className="h-4 w-4 text-accent" />
-          <h3 className="text-sm font-semibold">Paleta de Colores VTS</h3>
-          <span className="text-[10px] text-muted-foreground ml-auto">
-            Estándar IALA V-103 · Maritime VTS Color Scheme
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-sidebar-foreground tracking-wide">DISEÑO VISUAL</h3>
+            <p className="text-[10px] text-sidebar-foreground/60">Selecciona el esquema cromático del radar</p>
+          </div>
+          <button
+            onClick={() => setSelectedTheme("maritimo_profundo")}
+            className="text-[10px] text-sidebar-foreground/40 hover:text-sidebar-foreground/70 transition-colors"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Selector de temas — lista vertical estilo la imagen */}
+        <div className="bg-[#0a0f1a] p-3 space-y-1">
+          {themes.map((theme) => {
+            const isSelected = theme.id === selectedTheme;
+            return (
+              <button
+                key={theme.id}
+                onClick={() => setSelectedTheme(theme.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-all text-left",
+                  isSelected
+                    ? "bg-white/5 ring-1 ring-white/10"
+                    : "hover:bg-white/[0.03]",
+                )}
+              >
+                {/* Círculo de color sólido (swatch) */}
+                <div className="relative shrink-0">
+                  <span
+                    className="block h-7 w-7 rounded-full ring-2 ring-white/10"
+                    style={{
+                      background: `radial-gradient(circle at 30% 30%, ${theme.accent}, ${theme.primary} 70%)`,
+                      boxShadow: isSelected ? `0 0 12px ${theme.accent}80` : "none",
+                    }}
+                  />
+                </div>
+
+                {/* Nombre + descripción */}
+                <div className="flex-1 min-w-0">
+                  <div className={cn(
+                    "text-sm font-semibold",
+                    isSelected ? "text-white" : "text-gray-300",
+                  )}>
+                    {theme.name}
+                  </div>
+                  <div className="text-[10px] text-gray-500 leading-tight">
+                    {theme.description}
+                  </div>
+                </div>
+
+                {/* Checkmark verde si está seleccionado */}
+                {isSelected && (
+                  <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 py-2 bg-[#0a0f1a] border-t border-white/5 text-center">
+          <span className="text-[9px] text-gray-500 font-mono-tabular">
+            {themes.length} temas disponibles · Estándar DIRECTEMAR · IALA V-103
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {palettes.map((p) => (
-            <div key={p.title} className="space-y-1.5">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
-                {p.title}
+
+        {/* Preview de la paleta seleccionada */}
+        <div className="p-3 bg-muted/30 border-t border-border space-y-2">
+          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+            Vista previa · {selected.name}
+          </div>
+          <div className="flex items-center gap-2">
+            {[
+              { name: "Fondo", color: selected.bg },
+              { name: "Primario", color: selected.primary },
+              { name: "Secundario", color: selected.secondary },
+              { name: "Acento", color: selected.accent },
+            ].map((c) => (
+              <div key={c.name} className="flex-1 text-center">
+                <div
+                  className="h-8 rounded-md mb-1 border border-border"
+                  style={{ background: c.color }}
+                />
+                <div className="text-[9px] text-muted-foreground">{c.name}</div>
+                <div className="text-[8px] font-mono-tabular text-muted-foreground/70">{c.color}</div>
               </div>
-              <div className="space-y-1">
-                {p.items.map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 text-xs">
-                    <span
-                      className="h-3 w-3 rounded-sm shrink-0 border border-border"
-                      style={{ background: item.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium">{item.label}</div>
-                      {item.description && (
-                        <div className="text-[10px] text-muted-foreground leading-tight">{item.description}</div>
-                      )}
-                    </div>
-                    <code className="text-[9px] font-mono text-muted-foreground shrink-0">{item.color}</code>
+            ))}
+          </div>
+        </div>
+
+        {/* Paleta operativa de referencia (siempre visible, compacta) */}
+        <div className="p-3 border-t border-border bg-card/50">
+          <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+            Colores operativos VTS
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+            <div className="space-y-1">
+              <div className="text-[9px] text-muted-foreground/70 uppercase tracking-wider">Tipos de buque</div>
+              <div className="flex flex-wrap gap-1.5">
+                {operationalColors.map((c) => (
+                  <div key={c.label} className="flex items-center gap-1" title={c.label}>
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} />
+                    <span className="text-[9px] text-muted-foreground">{c.label}</span>
                   </div>
                 ))}
               </div>
             </div>
-          ))}
+            <div className="space-y-1">
+              <div className="text-[9px] text-muted-foreground/70 uppercase tracking-wider">Estado de puerto</div>
+              <div className="flex flex-wrap gap-1.5">
+                {statusColors.map((c) => (
+                  <div key={c.label} className="flex items-center gap-1" title={c.label}>
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c.color }} />
+                    <span className="text-[9px] text-muted-foreground">{c.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

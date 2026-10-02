@@ -20,6 +20,7 @@ import {
   CalendarDays,
   Filter,
   Download,
+  Zap,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +79,104 @@ export function TramitesLogistica() {
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
   const [exportOpen, setExportOpen] = useState(false);
+
+  // Campos del formulario controlados (fáciles de llenar)
+  const [formData, setFormData] = useState({
+    vessel: "Atlantic Trader",
+    rut: "76.123.456-7",
+    originPort: "Valparaíso",
+    destinationPort: "San Antonio",
+    cargo: "",
+    draft: "",
+    crew: "",
+    observations: "",
+  });
+
+  const setField = (field: keyof typeof formData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Plantillas rápidas para llenado frecuente
+  const quickTemplates = [
+    {
+      id: "zarpe-carga",
+      label: "Zarpe carga seca",
+      icon: Ship,
+      data: {
+        formType: "zarpe",
+        vessel: "Pacific Star",
+        rut: "76.123.456-7",
+        originPort: "Valparaíso",
+        destinationPort: "San Antonio",
+        cargo: "Carga seca · 24 TEU contenedores",
+        draft: "8.5",
+        crew: "18",
+        observations: "Zarpe rutinario, sin restricciones especiales",
+      },
+    },
+    {
+      id: "zarpe-granel",
+      label: "Zarpe granel líquido",
+      icon: Anchor,
+      data: {
+        formType: "zarpe",
+        vessel: "Atlantic Trader",
+        rut: "78.345.678-9",
+        originPort: "Concepción — Talcahuano",
+        destinationPort: "Puerto Montt",
+        cargo: "Granel líquido · combustible",
+        draft: "9.2",
+        crew: "22",
+        observations: "Operación sujeta a inspección ambiental",
+      },
+    },
+    {
+      id: "permiso-buceo",
+      label: "Permiso buceo",
+      icon: Anchor,
+      data: {
+        formType: "permiso",
+        vessel: "Calypso II",
+        rut: "79.987.654-3",
+        originPort: "Iquique",
+        destinationPort: "Iquique",
+        cargo: "N/A",
+        draft: "3.5",
+        crew: "8",
+        observations: "Operación de buceo profesional · 4 buzos · zona costera",
+      },
+    },
+    {
+      id: "certificado-navegacion",
+      label: "Cert. navegación",
+      icon: FileText,
+      data: {
+        formType: "certificado",
+        vessel: "Beagle",
+        rut: "77.555.666-7",
+        originPort: "Valparaíso",
+        destinationPort: "Valparaíso",
+        cargo: "N/A",
+        draft: "5.0",
+        crew: "12",
+        observations: "Renovación certificado de navegación anual",
+      },
+    },
+  ];
+
+  const applyTemplate = (template: typeof quickTemplates[0]) => {
+    setFormType(template.data.formType);
+    setFormData({
+      vessel: template.data.vessel,
+      rut: template.data.rut,
+      originPort: template.data.originPort,
+      destinationPort: template.data.destinationPort,
+      cargo: template.data.cargo,
+      draft: template.data.draft,
+      crew: template.data.crew,
+      observations: template.data.observations,
+    });
+  };
 
   // Filtrar trámites por zona marítima
   const filteredByZona = tramites.filter((t) => {
@@ -525,13 +624,16 @@ export function TramitesLogistica() {
       {/* New trámite dialog */}
       {showNewForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto scrollbar-thin">
-            <CardHeader className="pb-3 sticky top-0 bg-card border-b border-border">
+          <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto scrollbar-thin">
+            <CardHeader className="pb-3 sticky top-0 bg-card border-b border-border z-10">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-base">Nuevo Trámite Marítimo</CardTitle>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-accent" />
+                    Nuevo Trámite Marítimo
+                  </CardTitle>
                   <CardDescription className="text-xs">
-                    Autenticado como: Compañía Marítima del Pacífico SpA · ClaveÚnica verificado
+                    Autenticado como: Compañía Marítima del Pacífico SpA · ClaveÚnica verificado · Ley 19.799
                   </CardDescription>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setShowNewForm(false)}>
@@ -540,8 +642,37 @@ export function TramitesLogistica() {
               </div>
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
+              {/* === Plantillas rápidas === */}
               <div>
-                <Label className="text-xs font-semibold">Tipo de trámite</Label>
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="h-3.5 w-3.5 text-accent" />
+                  <Label className="text-xs font-semibold uppercase tracking-wider">Plantillas rápidas</Label>
+                  <span className="text-[10px] text-muted-foreground ml-auto">Un clic llena el formulario</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {quickTemplates.map((tpl) => {
+                    const Icon = tpl.icon;
+                    return (
+                      <button
+                        key={tpl.id}
+                        onClick={() => applyTemplate(tpl)}
+                        className="flex flex-col items-center gap-1 p-2.5 rounded-md border border-border hover:border-accent/50 hover:bg-accent/5 transition-all text-center"
+                      >
+                        <div className="h-8 w-8 rounded-md bg-accent/10 text-accent flex items-center justify-center">
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span className="text-[10px] font-medium leading-tight">{tpl.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border-t border-border pt-3" />
+
+              {/* === Tipo de trámite === */}
+              <div>
+                <Label className="text-xs font-semibold">Tipo de trámite <span className="text-destructive">*</span></Label>
                 <Select value={formType} onValueChange={setFormType}>
                   <SelectTrigger className="mt-1.5">
                     <SelectValue />
@@ -554,40 +685,116 @@ export function TramitesLogistica() {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs font-semibold">Embarcación</Label>
-                  <Input defaultValue="Atlantic Trader" className="mt-1.5 text-xs" />
-                </div>
-                <div>
-                  <Label className="text-xs font-semibold">RUT Postulante</Label>
-                  <Input defaultValue="76.123.456-7" className="mt-1.5 text-xs font-mono-tabular" />
-                </div>
-                <div>
-                  <Label className="text-xs font-semibold">Puerto de zarpe / operación</Label>
-                  <Select defaultValue="Valparaíso">
-                    <SelectTrigger className="mt-1.5 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PORTS.map((p) => (
-                        <SelectItem key={p.code} value={p.name}>{p.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs font-semibold">Puerto destino</Label>
-                  <Input defaultValue="San Antonio" className="mt-1.5 text-xs" />
-                </div>
-              </div>
-
+              {/* === Datos del postulante === */}
               <div>
-                <Label className="text-xs font-semibold">Observaciones / Carga</Label>
-                <Input placeholder="Contenedor, granel, carga general, etc." className="mt-1.5 text-xs" />
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+                  Datos del postulante
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-semibold">RUT <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={formData.rut}
+                      onChange={(e) => setField("rut", e.target.value)}
+                      placeholder="76.123.456-7"
+                      className="mt-1.5 text-xs font-mono-tabular"
+                    />
+                    <p className="text-[9px] text-muted-foreground mt-1">RUT de la empresa o persona postulante</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">Embarcación <span className="text-destructive">*</span></Label>
+                    <Input
+                      value={formData.vessel}
+                      onChange={(e) => setField("vessel", e.target.value)}
+                      placeholder="Nombre de la nave"
+                      className="mt-1.5 text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-border">
+              {/* === Datos operativos === */}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+                  Datos operativos
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-semibold">Puerto de zarpe / operación <span className="text-destructive">*</span></Label>
+                    <Select value={formData.originPort} onValueChange={(v) => setField("originPort", v)}>
+                      <SelectTrigger className="mt-1.5 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PORTS.map((p) => (
+                          <SelectItem key={p.code} value={p.name}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">Puerto destino</Label>
+                    <Input
+                      value={formData.destinationPort}
+                      onChange={(e) => setField("destinationPort", e.target.value)}
+                      placeholder="Puerto de destino"
+                      className="mt-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">Calado (metros)</Label>
+                    <Input
+                      value={formData.draft}
+                      onChange={(e) => setField("draft", e.target.value)}
+                      placeholder="Ej: 8.5"
+                      type="number"
+                      step="0.1"
+                      className="mt-1.5 text-xs font-mono-tabular"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">Tripulación (n°)</Label>
+                    <Input
+                      value={formData.crew}
+                      onChange={(e) => setField("crew", e.target.value)}
+                      placeholder="Ej: 18"
+                      type="number"
+                      className="mt-1.5 text-xs font-mono-tabular"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* === Carga y observaciones === */}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">
+                  Carga y observaciones
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-xs font-semibold">Tipo de carga</Label>
+                    <Input
+                      value={formData.cargo}
+                      onChange={(e) => setField("cargo", e.target.value)}
+                      placeholder="Contenedor, granel, carga general, etc."
+                      className="mt-1.5 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold">Observaciones</Label>
+                    <textarea
+                      value={formData.observations}
+                      onChange={(e) => setField("observations", e.target.value)}
+                      placeholder="Información adicional, restricciones, notas operativas…"
+                      rows={3}
+                      className="mt-1.5 w-full text-xs px-3 py-2 rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent/30 resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* === Resumen de costos === */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-3 border-t border-border bg-muted/30 -mx-4 px-4 py-3">
                 <div className="text-xs">
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Costo</div>
                   <div className="font-mono-tabular font-bold mt-0.5">{TRAMITE_TYPES.find((t) => t.id === formType)?.cost}</div>
@@ -602,14 +809,25 @@ export function TramitesLogistica() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2 border-t border-border">
+              {/* === Validación de campos requeridos === */}
+              <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                <span className={cn("h-1.5 w-1.5 rounded-full", formData.rut && formData.vessel && formData.originPort ? "bg-emerald-500" : "bg-amber-500")} />
+                <span>
+                  {formData.rut && formData.vessel && formData.originPort
+                    ? "Listo para enviar — todos los campos requeridos completos"
+                    : "Completa los campos marcados con * para enviar"}
+                </span>
+              </div>
+
+              {/* === Acciones === */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border sticky bottom-0 bg-card">
                 <Button variant="outline" className="gap-1.5 text-xs flex-1">
                   <RefreshCw className="h-3.5 w-3.5" />
                   Guardar borrador
                 </Button>
                 <Button
                   onClick={submitTramite}
-                  disabled={formSubmitted}
+                  disabled={formSubmitted || !formData.rut || !formData.vessel || !formData.originPort}
                   className="gap-1.5 text-xs flex-1"
                 >
                   {formSubmitted ? (
