@@ -11,6 +11,7 @@ import { BitacoraAuditante } from "@/components/directemar/bitacora-auditante";
 import { TramitesLogistica } from "@/components/directemar/tramites-logistica";
 import { NormativaMaritima } from "@/components/directemar/normativa-maritima";
 import { DatosEstadisticas } from "@/components/directemar/datos-estadisticas";
+import { GlaucoChat } from "@/components/directemar/glauco-chat";
 import { Button } from "@/components/ui/button";
 import { INITIAL_ALERTS } from "@/lib/directemar-data";
 
@@ -74,6 +75,9 @@ export default function Home() {
           <Footer />
         </main>
       </div>
+
+      {/* Glauco — Asistente espiritual y operativo del mar */}
+      <GlaucoChat />
     </div>
   );
 }
