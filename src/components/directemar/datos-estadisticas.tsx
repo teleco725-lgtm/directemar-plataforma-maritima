@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -16,8 +17,227 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  ZONAS_MARITIMAS,
+  ALL_REGIONS_FILTER,
+  INITIAL_TRAMITES,
+  INITIAL_ALERTS,
+  INITIAL_AUDIT,
+  PORTS,
+  fmtDateTime,
+  type Tramite,
+  type MaritimeAlert,
+  type AuditEntry,
+  type Port,
+} from "@/lib/directemar-data";
+import { RegionFilter } from "@/components/directemar/region-filter";
+import { ExportModal } from "@/components/directemar/export-modal";
+import type { ExportPayload } from "@/lib/export-utils";
+
+interface DatasetRow {
+  categoria: string;
+  descripcion: string;
+  registros: string;
+  actualizado: string;
+  formato: string;
+  fuente: string;
+}
+
+const DATASETS: DatasetRow[] = [
+  { categoria: "Resoluciones", descripcion: "Resoluciones EXENTAS vigentes", registros: "1,247", actualizado: "hace 2 min", formato: "JSON", fuente: "DIRECTEMAR" },
+  { categoria: "Puertos", descripcion: "Estado de puertos en tiempo real", registros: "12", actualizado: "hace 1 min", formato: "JSON", fuente: "Gobernación Marítima" },
+  { categoria: "Meteorología", descripcion: "Partes meteorológicos SERVIMET", registros: "8,760", actualizado: "hace 5 min", formato: "CSV", fuente: "SERVIMET" },
+  { categoria: "Zarpes", descripcion: "Zarpes registrados (histórico)", registros: "428K", actualizado: "diario 03:00", formato: "CSV", fuente: "Capitanías de Puerto" },
+  { categoria: "Cartografía", descripcion: "Cartas náuticas disponibles SHOA", registros: "342", actualizado: "semanal", formato: "GeoJSON", fuente: "SHOA" },
+  { categoria: "Fiscalización", descripcion: "Estadísticas de fiscalización", registros: "12,470", actualizado: "mensual", formato: "CSV", fuente: "DIRECTEMAR" },
+];
+
+const TRAFFIC_MONTHLY = [
+  { m: "Ene", v: 3200 }, { m: "Feb", v: 3100 }, { m: "Mar", v: 3400 },
+  { m: "Abr", v: 3600 }, { m: "May", v: 3300 }, { m: "Jun", v: 3500 },
+  { m: "Jul", v: 3800 }, { m: "Ago", v: 4100 }, { m: "Sep", v: 3900 },
+  { m: "Oct", v: 4230, current: true },
+];
+
+const INCIDENTS_BY_ZONE = [
+  { zone: "Valparaíso — San Antonio", count: 8, color: "bg-destructive" },
+  { zone: "Talcahuano", count: 5, color: "bg-amber-500" },
+  { zone: "Puerto Montt — Chiloé", count: 6, color: "bg-destructive" },
+  { zone: "Punta Arenas", count: 3, color: "bg-amber-500" },
+  { zone: "Antofagasta — Iquique", count: 3, color: "bg-amber-500" },
+  { zone: "Arica", count: 2, color: "bg-accent" },
+];
+
+const INCIDENTS_BY_TYPE = [
+  { type: "Intrusión zona restr.", count: 11, dot: "bg-destructive" },
+  { type: "Exceso velocidad", count: 6, dot: "bg-amber-500" },
+  { type: "Calado excedido", count: 4, dot: "bg-amber-500" },
+  { type: "Comunicación fallida", count: 3, dot: "bg-accent" },
+  { type: "Otro", count: 3, dot: "bg-muted-foreground" },
+];
 
 export function DatosEstadisticas() {
+  const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportTarget, setExportTarget] = useState<"datasets" | "tramites" | "alertas" | "audit" | "ports">("datasets");
+
+  // Datos filtrados por zona marítima
+  const filteredTramites = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return INITIAL_TRAMITES;
+    return INITIAL_TRAMITES.filter((t) => t.zonaMaritima === zonaFilter);
+  }, [zonaFilter]);
+
+  const filteredAlerts = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return INITIAL_ALERTS;
+    return INITIAL_ALERTS.filter((a) => a.zonaMaritima === zonaFilter);
+  }, [zonaFilter]);
+
+  const filteredAudit = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return INITIAL_AUDIT;
+    return INITIAL_AUDIT.filter((a) => a.zonaMaritima === zonaFilter);
+  }, [zonaFilter]);
+
+  const filteredPorts = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return PORTS;
+    const zona = ZONAS_MARITIMAS.find((z) => z.code === zonaFilter);
+    if (!zona) return PORTS;
+    return PORTS.filter((p) => zona.regions.includes(p.region));
+  }, [zonaFilter]);
+
+  const zonaLabel = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return "Nacional — Todo Chile";
+    const z = ZONAS_MARITIMAS.find((x) => x.code === zonaFilter);
+    return z ? `${z.code} · ${z.name} (${z.hq})` : "Nacional";
+  }, [zonaFilter]);
+
+  // Adaptadores para los ExportPayload genéricos
+  const datasetsRows: DatasetRow[] = DATASETS;
+  const tramiteRows: Tramite[] = filteredTramites;
+  const alertRows: MaritimeAlert[] = filteredAlerts;
+  const auditRows: AuditEntry[] = filteredAudit;
+  const portRows: Port[] = filteredPorts;
+
+  const exportPayload: ExportPayload<DatasetRow | Tramite | MaritimeAlert | AuditEntry | Port> =
+    exportTarget === "datasets"
+      ? {
+          title: "Datasets abiertos DIRECTEMAR",
+          subtitle: "Catálogo de datos públicos · Ley N° 20.285",
+          zonaMaritimaLabel: zonaLabel,
+          columns: [
+            { key: "categoria", label: "Categoría" },
+            { key: "descripcion", label: "Descripción" },
+            { key: "registros", label: "Registros" },
+            { key: "actualizado", label: "Actualizado" },
+            { key: "formato", label: "Formato" },
+            { key: "fuente", label: "Fuente" },
+          ],
+          rows: datasetsRows as Array<DatasetRow | Tramite | MaritimeAlert | AuditEntry | Port>,
+          meta: {
+            "Total datasets": String(datasetsRows.length),
+            "Datasets en tiempo real": "2",
+            "Formatos disponibles": "JSON, CSV, GeoJSON",
+          },
+        }
+      : exportTarget === "tramites"
+      ? {
+          title: "Trámites registrados",
+          subtitle: "Portal de autogestión marítima",
+          zonaMaritimaLabel: zonaLabel,
+          columns: [
+            { key: "folio", label: "Folio" },
+            { key: "type", label: "Tipo" },
+            { key: "applicant", label: "Postulante" },
+            { key: "applicantRut", label: "RUT" },
+            { key: "vessel", label: "Embarcación" },
+            { key: "port", label: "Puerto" },
+            { key: "status", label: "Estado" },
+            { key: "amount", label: "Monto (UF)", format: (r) => String((r as Tramite).amount) },
+            { key: "submittedAt", label: "Ingresado", format: (r) => fmtDateTime((r as Tramite).submittedAt) },
+          ],
+          rows: tramiteRows as Array<DatasetRow | Tramite | MaritimeAlert | AuditEntry | Port>,
+          meta: {
+            "Total trámites": String(tramiteRows.length),
+            "Aprobados": String(tramiteRows.filter((t) => t.status === "Aprobado").length),
+            "En proceso": String(tramiteRows.filter((t) => t.status === "En Revisión" || t.status === "Ingresado").length),
+            "Recaudado UF": tramiteRows.reduce((s, t) => s + t.amount, 0).toFixed(1),
+          },
+        }
+      : exportTarget === "alertas"
+      ? {
+          title: "Alertas marítimas activas",
+          subtitle: "Panel de alertas integradas",
+          zonaMaritimaLabel: zonaLabel,
+          columns: [
+            { key: "id", label: "ID" },
+            { key: "severity", label: "Severidad" },
+            { key: "source", label: "Fuente" },
+            { key: "title", label: "Título" },
+            { key: "zone", label: "Zona" },
+            { key: "region", label: "Región" },
+            { key: "zonaMaritima", label: "ZM" },
+            { key: "issuedAt", label: "Emitida", format: (r) => fmtDateTime((r as MaritimeAlert).issuedAt) },
+            { key: "acknowledged", label: "Reconocida", format: (r) => ((r as MaritimeAlert).acknowledged ? "Sí" : "No") },
+          ],
+          rows: alertRows as Array<DatasetRow | Tramite | MaritimeAlert | AuditEntry | Port>,
+          meta: {
+            "Total alertas": String(alertRows.length),
+            "Críticas": String(alertRows.filter((a) => a.severity === "critical").length),
+            "Advertencias": String(alertRows.filter((a) => a.severity === "warning").length),
+            "Reconocidas": String(alertRows.filter((a) => a.acknowledged).length),
+          },
+        }
+      : exportTarget === "audit"
+      ? {
+          title: "Bitácora auditante",
+          subtitle: "Cadena de eventos con hash criptográfico",
+          zonaMaritimaLabel: zonaLabel,
+          columns: [
+            { key: "blockSeq", label: "Bloque #", format: (r) => String((r as AuditEntry).blockSeq) },
+            { key: "timestamp", label: "Timestamp", format: (r) => fmtDateTime((r as AuditEntry).timestamp) },
+            { key: "actor", label: "Actor" },
+            { key: "role", label: "Rol" },
+            { key: "action", label: "Acción" },
+            { key: "target", label: "Objetivo" },
+            { key: "zonaMaritima", label: "ZM" },
+            { key: "hash", label: "Hash", format: (r) => (r as AuditEntry).hash.slice(0, 16) + "…" },
+          ],
+          rows: auditRows as Array<DatasetRow | Tramite | MaritimeAlert | AuditEntry | Port>,
+          meta: {
+            "Total bloques": String(auditRows.length),
+            "Último bloque #": String(auditRows[0]?.blockSeq ?? 0),
+            "Integridad de cadena": "100%",
+            "Algoritmo": "SHA-256",
+          },
+        }
+      : {
+          // ports
+          title: "Estado de puertos",
+          subtitle: "Sincronizado con Gobernaciones Marítimas",
+          zonaMaritimaLabel: zonaLabel,
+          columns: [
+            { key: "code", label: "Código" },
+            { key: "name", label: "Puerto" },
+            { key: "region", label: "Región" },
+            { key: "status", label: "Estado" },
+            { key: "windKn", label: "Viento (kn)" },
+            { key: "waveM", label: "Ola (m)" },
+            { key: "visibilityNm", label: "Visibilidad (nm)" },
+            { key: "lastUpdate", label: "Últ. actualización" },
+          ],
+          rows: portRows as Array<DatasetRow | Tramite | MaritimeAlert | AuditEntry | Port>,
+          meta: {
+            "Total puertos": String(portRows.length),
+            "Operativos": String(portRows.filter((p) => p.status === "open").length),
+            "Restringidos": String(portRows.filter((p) => p.status === "restricted").length),
+            "Cerrados": String(portRows.filter((p) => p.status === "closed").length),
+          },
+        };
+
+  const openExport = (target: typeof exportTarget) => {
+    setExportTarget(target);
+    setExportOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -31,11 +251,14 @@ export function DatosEstadisticas() {
             Datos abiertos · Ley N° 20.285 · Actualización continua desde fuentes oficiales
           </p>
         </div>
-        <Button variant="outline" className="gap-1.5">
+        <Button variant="outline" className="gap-1.5" onClick={() => openExport("datasets")}>
           <Download className="h-4 w-4" />
           Exportar dataset
         </Button>
       </div>
+
+      {/* Region filter */}
+      <RegionFilter value={zonaFilter} onChange={setZonaFilter} variant="full" />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -262,6 +485,9 @@ export function DatosEstadisticas() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Export modal */}
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} payload={exportPayload} />
     </div>
   );
 }

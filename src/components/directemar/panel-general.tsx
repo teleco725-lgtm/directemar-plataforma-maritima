@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import {
   Ship,
   Anchor,
@@ -15,13 +16,28 @@ import {
   MapPin,
   ArrowRight,
   ShieldCheck,
+  Download,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { PORTS, KPI_STATS, INITIAL_ALERTS, INITIAL_AUDIT, fmtTime, type Port, type PortStatus } from "@/lib/directemar-data";
+import {
+  PORTS,
+  KPI_STATS,
+  INITIAL_ALERTS,
+  INITIAL_AUDIT,
+  ZONAS_MARITIMAS,
+  ALL_REGIONS_FILTER,
+  getZonaByRegion,
+  fmtTime,
+  type Port,
+  type PortStatus,
+} from "@/lib/directemar-data";
+import { RegionFilter } from "@/components/directemar/region-filter";
+import { ExportModal } from "@/components/directemar/export-modal";
+import type { ExportPayload } from "@/lib/export-utils";
 
 interface PanelGeneralProps {
   onNavigate: (section: string) => void;
@@ -34,10 +50,64 @@ const statusConfig: Record<PortStatus, { label: string; color: string; dot: stri
 };
 
 export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
-  const openPorts = PORTS.filter((p) => p.status === "open").length;
-  const restrictedPorts = PORTS.filter((p) => p.status === "restricted").length;
-  const closedPorts = PORTS.filter((p) => p.status === "closed").length;
-  const criticalAlerts = INITIAL_ALERTS.filter((a) => a.severity === "critical").length;
+  const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
+  const [exportOpen, setExportOpen] = useState(false);
+
+  // Filtra puertos por zona marítima
+  const filteredPorts = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return PORTS;
+    const zona = ZONAS_MARITIMAS.find((z) => z.code === zonaFilter);
+    if (!zona) return PORTS;
+    return PORTS.filter((p) => zona.regions.includes(p.region));
+  }, [zonaFilter]);
+
+  // Filtra alertas por zona marítima
+  const filteredAlerts = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return INITIAL_ALERTS;
+    return INITIAL_ALERTS.filter((a) => a.zonaMaritima === zonaFilter);
+  }, [zonaFilter]);
+
+  // Filtra bitácora por zona marítima
+  const filteredAudit = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return INITIAL_AUDIT;
+    return INITIAL_AUDIT.filter((a) => a.zonaMaritima === zonaFilter);
+  }, [zonaFilter]);
+
+  const openPorts = filteredPorts.filter((p) => p.status === "open").length;
+  const restrictedPorts = filteredPorts.filter((p) => p.status === "restricted").length;
+  const closedPorts = filteredPorts.filter((p) => p.status === "closed").length;
+  const criticalAlerts = filteredAlerts.filter((a) => a.severity === "critical").length;
+
+  const zonaLabel = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return "Nacional — Todo Chile";
+    const z = ZONAS_MARITIMAS.find((x) => x.code === zonaFilter);
+    return z ? `${z.code} · ${z.name} (${z.hq})` : "Nacional";
+  }, [zonaFilter]);
+
+  const exportPayload: ExportPayload<Port> = {
+    title: "Estado operacional del litoral",
+    subtitle: "Panel General · DIRECTEMAR",
+    zonaMaritimaLabel: zonaLabel,
+    columns: [
+      { key: "code", label: "Código" },
+      { key: "name", label: "Puerto" },
+      { key: "region", label: "Región" },
+      { key: "status", label: "Estado" },
+      { key: "windKn", label: "Viento (kn)" },
+      { key: "waveM", label: "Ola (m)" },
+      { key: "visibilityNm", label: "Visibilidad (nm)" },
+      { key: "restriction", label: "Restricción" },
+    ],
+    rows: filteredPorts,
+    meta: {
+      "Total puertos": String(filteredPorts.length),
+      "Operativos": String(openPorts),
+      "Restringidos": String(restrictedPorts),
+      "Cerrados": String(closedPorts),
+      "Alertas activas": String(filteredAlerts.length),
+      "Alertas críticas": String(criticalAlerts),
+    },
+  };
 
   return (
     <div className="space-y-6">
@@ -49,11 +119,20 @@ export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
             Estado operacional del litoral chileno · Sincronizado con fuentes SHOA, SERVIMET y Gobernaciones Marítimas
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-          <span>Integridad de cadena: <span className="font-mono-tabular font-semibold text-foreground">100%</span></span>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+            <span>Integridad: <span className="font-mono-tabular font-semibold text-foreground">100%</span></span>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)} className="gap-1.5 text-xs">
+            <Download className="h-3.5 w-3.5" />
+            Exportar
+          </Button>
         </div>
       </div>
+
+      {/* Region filter */}
+      <RegionFilter value={zonaFilter} onChange={setZonaFilter} variant="full" />
 
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -67,14 +146,14 @@ export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
         <KpiCard
           icon={Anchor}
           label="Puertos monitoreados"
-          value={`${openPorts}/${PORTS.length}`}
+          value={`${openPorts}/${filteredPorts.length}`}
           subValue={`${restrictedPorts} restrict. · ${closedPorts} cerrados`}
           trend="flat"
         />
         <KpiCard
           icon={AlertTriangle}
           label="Alertas activas"
-          value={KPI_STATS.activeAlerts}
+          value={filteredAlerts.length}
           subValue={`${criticalAlerts} críticas`}
           trend="up"
           alert
@@ -121,7 +200,7 @@ export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="max-h-80 overflow-y-auto scrollbar-thin pr-1 space-y-1.5">
-              {PORTS.map((port) => {
+              {filteredPorts.map((port) => {
                 const cfg = statusConfig[port.status];
                 return (
                   <div
@@ -169,7 +248,7 @@ export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
             </div>
           </CardHeader>
           <CardContent className="pt-0 space-y-2">
-            {INITIAL_ALERTS.slice(0, 4).map((alert) => (
+            {filteredAlerts.slice(0, 4).map((alert) => (
               <div
                 key={alert.id}
                 className={cn(
@@ -220,7 +299,7 @@ export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
             </div>
           </CardHeader>
           <CardContent className="pt-0 space-y-2">
-            {INITIAL_AUDIT.slice(0, 4).map((entry) => (
+            {filteredAudit.slice(0, 4).map((entry) => (
               <div key={entry.id} className="flex items-start gap-2.5 px-2 py-1.5 text-xs">
                 <span className="mt-0.5 h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
                 <div className="flex-1 min-w-0">
@@ -260,6 +339,9 @@ export function PanelGeneral({ onNavigate }: PanelGeneralProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Export modal */}
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} payload={exportPayload} />
     </div>
   );
 }

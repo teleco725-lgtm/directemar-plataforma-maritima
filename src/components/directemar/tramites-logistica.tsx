@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   FileText,
   Ship,
@@ -19,6 +19,7 @@ import {
   TrendingUp,
   CalendarDays,
   Filter,
+  Download,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +41,17 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { INITIAL_TRAMITES, PORTS, fmtDateTime, type Tramite } from "@/lib/directemar-data";
+import {
+  INITIAL_TRAMITES,
+  PORTS,
+  ZONAS_MARITIMAS,
+  ALL_REGIONS_FILTER,
+  fmtDateTime,
+  type Tramite,
+} from "@/lib/directemar-data";
+import { RegionFilter } from "@/components/directemar/region-filter";
+import { ExportModal } from "@/components/directemar/export-modal";
+import type { ExportPayload } from "@/lib/export-utils";
 
 const STATUS_CONFIG: Record<Tramite["status"], { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
   "Borrador": { label: "Borrador", color: "text-muted-foreground border-border", icon: FileText },
@@ -65,8 +76,16 @@ export function TramitesLogistica() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [formType, setFormType] = useState("zarpe");
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
+  const [exportOpen, setExportOpen] = useState(false);
 
-  const filtered = tramites.filter((t) => {
+  // Filtrar trámites por zona marítima
+  const filteredByZona = tramites.filter((t) => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return true;
+    return t.zonaMaritima === zonaFilter;
+  });
+
+  const filtered = filteredByZona.filter((t) => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -80,9 +99,43 @@ export function TramitesLogistica() {
     return true;
   });
 
-  const totalValue = tramites.reduce((s, t) => s + t.amount, 0);
-  const approvedCount = tramites.filter((t) => t.status === "Aprobado").length;
-  const pendingCount = tramites.filter((t) => t.status === "En Revisión" || t.status === "Ingresado").length;
+  const totalValue = filteredByZona.reduce((s, t) => s + t.amount, 0);
+  const approvedCount = filteredByZona.filter((t) => t.status === "Aprobado").length;
+  const pendingCount = filteredByZona.filter((t) => t.status === "En Revisión" || t.status === "Ingresado").length;
+
+  const zonaLabel = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return "Nacional — Todo Chile";
+    const z = ZONAS_MARITIMAS.find((x) => x.code === zonaFilter);
+    return z ? `${z.code} · ${z.name} (${z.hq})` : "Nacional";
+  }, [zonaFilter]);
+
+  const exportPayload: ExportPayload<Tramite> = {
+    title: "Trámites marítimos",
+    subtitle: "Portal de autogestión · ClaveÚnica · Ley 19.799",
+    zonaMaritimaLabel: zonaLabel,
+    columns: [
+      { key: "folio", label: "Folio" },
+      { key: "type", label: "Tipo" },
+      { key: "applicant", label: "Postulante" },
+      { key: "applicantRut", label: "RUT" },
+      { key: "vessel", label: "Embarcación" },
+      { key: "port", label: "Puerto" },
+      { key: "region", label: "Región" },
+      { key: "zonaMaritima", label: "ZM" },
+      { key: "status", label: "Estado" },
+      { key: "amount", label: "Monto (UF)", format: (r) => r.amount.toFixed(1) },
+      { key: "progress", label: "Progreso", format: (r) => `${r.progress}%` },
+      { key: "submittedAt", label: "Ingresado", format: (r) => fmtDateTime(r.submittedAt) },
+    ],
+    rows: filteredByZona,
+    meta: {
+      "Total trámites": String(filteredByZona.length),
+      "Aprobados": String(approvedCount),
+      "En proceso": String(pendingCount),
+      "Recaudado UF": totalValue.toFixed(1),
+      "Promedio UF/trámite": (totalValue / Math.max(filteredByZona.length, 1)).toFixed(2),
+    },
+  };
 
   const submitTramite = () => {
     setFormSubmitted(true);
@@ -123,14 +176,21 @@ export function TramitesLogistica() {
           <FileText className="h-4 w-4" />
           Nuevo Trámite
         </Button>
+        <Button variant="outline" onClick={() => setExportOpen(true)} className="gap-1.5">
+          <Download className="h-4 w-4" />
+          Exportar
+        </Button>
       </div>
+
+      {/* Region filter */}
+      <RegionFilter value={zonaFilter} onChange={setZonaFilter} variant="full" />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard icon={FileText} label="Trámites hoy" value={tramites.length} sub={`${pendingCount} en proceso`} />
-        <StatCard icon={CheckCircle2} label="Aprobados" value={approvedCount} sub="Hoy" tone="success" />
+        <StatCard icon={FileText} label="Trámites (filtro)" value={filteredByZona.length} sub={`${pendingCount} en proceso`} />
+        <StatCard icon={CheckCircle2} label="Aprobados" value={approvedCount} sub="En filtro actual" tone="success" />
         <StatCard icon={Clock} label="Tiempo prom." value="2.4 h" sub="Resolución" />
-        <StatCard icon={Wallet} label="Recaudado hoy" value={`${totalValue.toFixed(1)} UF`} sub="≈ $" tone="accent" />
+        <StatCard icon={Wallet} label="Recaudado (filtro)" value={`${totalValue.toFixed(1)} UF`} sub="≈ $" tone="accent" />
       </div>
 
       <Tabs defaultValue="list" className="space-y-4">
@@ -563,6 +623,9 @@ export function TramitesLogistica() {
           </Card>
         </div>
       )}
+
+      {/* Export modal */}
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} payload={exportPayload} />
     </div>
   );
 }

@@ -26,10 +26,13 @@ import {
   moveVessel,
   INITIAL_ALERTS,
   PORTS,
+  ZONAS_MARITIMAS,
+  ALL_REGIONS_FILTER,
   fmtTime,
   type Vessel,
   type MaritimeAlert,
 } from "@/lib/directemar-data";
+import { RegionFilter } from "@/components/directemar/region-filter";
 
 const VESSEL_TYPE_LABELS: Record<Vessel["type"], string> = {
   Cargo: "Carga",
@@ -66,6 +69,13 @@ export function OperacionVTS() {
   const [tickCount, setTickCount] = useState(0);
   const [showLabels, setShowLabels] = useState(true);
   const [showTrails, setShowTrails] = useState(true);
+  const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
+
+  // Filtrar alertas por zona marítima
+  const filteredAlerts = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return alerts;
+    return alerts.filter((a) => a.zonaMaritima === zonaFilter);
+  }, [alerts, zonaFilter]);
 
   // Real-time vessel movement simulation
   useEffect(() => {
@@ -77,7 +87,11 @@ export function OperacionVTS() {
   }, []);
 
   const filtered = useMemo(() => {
+    // Primero filtra por zona marítima
     let v = vessels;
+    if (zonaFilter !== ALL_REGIONS_FILTER) {
+      v = v.filter((x) => x.zonaMaritima === zonaFilter);
+    }
     if (filter !== "all") {
       if (filter === "high") v = v.filter((x) => x.risk === "high");
       else if (filter === "underway") v = v.filter((x) => x.status === "Under way");
@@ -93,7 +107,7 @@ export function OperacionVTS() {
       );
     }
     return v;
-  }, [vessels, filter, search]);
+  }, [vessels, filter, search, zonaFilter]);
 
   const selected = vessels.find((v) => v.mmsi === selectedMmsi);
 
@@ -135,6 +149,9 @@ export function OperacionVTS() {
           </Button>
         </div>
       </div>
+
+      {/* Region filter */}
+      <RegionFilter value={zonaFilter} onChange={setZonaFilter} variant="full" />
 
       {/* Tactical view */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
@@ -304,12 +321,12 @@ export function OperacionVTS() {
             <CardTitle className="text-base flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               Panel de Alertas
-              <Badge variant="secondary" className="text-[10px]">{alerts.length}</Badge>
+              <Badge variant="secondary" className="text-[10px]">{filteredAlerts.length}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="max-h-[360px] overflow-y-auto scrollbar-thin space-y-2 pr-1">
-              {alerts.map((alert) => {
+              {filteredAlerts.map((alert) => {
                 const cfg = SEVERITY_CONFIG[alert.severity];
                 return (
                   <div key={alert.id} className={cn("rounded-md border p-2.5", cfg.bg)}>

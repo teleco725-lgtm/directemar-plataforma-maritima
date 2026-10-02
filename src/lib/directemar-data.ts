@@ -6,6 +6,105 @@ export type PortStatus = "open" | "restricted" | "closed";
 export type AlertSeverity = "info" | "warning" | "critical";
 export type AlertSource = "SERVIMET" | "SHOA" | "AIS" | "GOUMAR" | "SISTEMA";
 
+// =====================================================================
+// ESTRUCTURA REGIONAL DIRECTEMAR
+// Basada en la organización oficial de la Autoridad Marítima de Chile:
+// 5 Zonas Marítimas mayores, cada una con su Dirección (Gobernación Marítima)
+// y las regiones administrativas chilenas bajo su jurisdicción.
+// =====================================================================
+
+export interface ZonaMaritima {
+  code: string;            // Código operativo (ej: "ZM-1")
+  name: string;            // Nombre oficial
+  hq: string;              // Sede de la Dirección (Gobernación Marítima)
+  hqAddress: string;       // Dirección postal real
+  hqPhone: string;          // Teléfono oficial
+  regions: string[];        // Regiones administrativas chilenas cubiertas
+  lat: number;
+  lng: number;
+  governor: string;         // Capitán de Zona (nombre simulado)
+  capitanias: number;       // Número de capitanías de puerto subordinadas
+}
+
+export const ZONAS_MARITIMAS: ZonaMaritima[] = [
+  {
+    code: "ZM-1",
+    name: "Primera Zona Marítima",
+    hq: "Valparaíso",
+    hqAddress: "Plaza Sotomayor 532, Valparaíso",
+    hqPhone: "+56 32 250 6000",
+    regions: ["Valparaíso", "Metropolitana", "O'Higgins", "Maule"],
+    lat: -33.0458,
+    lng: -71.6267,
+    governor: "Czre. Patricio Montenegro Saavedra",
+    capitanias: 8,
+  },
+  {
+    code: "ZM-2",
+    name: "Segunda Zona Marítima",
+    hq: "Talcahuano",
+    hqAddress: "Av. Jorge Alessandri 2500, Talcahuano",
+    hqPhone: "+56 41 254 1200",
+    regions: ["Ñuble", "Biobío", "Araucanía", "Los Ríos"],
+    lat: -36.7054,
+    lng: -73.1167,
+    governor: "Czre. Rodrigo Vergara Muñoz",
+    capitanias: 12,
+  },
+  {
+    code: "ZM-3",
+    name: "Tercera Zona Marítima",
+    hq: "Puerto Montt",
+    hqAddress: "Av. Angelmó 1655, Puerto Montt",
+    hqPhone: "+56 65 248 3100",
+    regions: ["Los Lagos", "Aysén"],
+    lat: -41.4706,
+    lng: -72.9422,
+    governor: "Czre. Manuel Astudillo Rojas",
+    capitanias: 14,
+  },
+  {
+    code: "ZM-4",
+    name: "Cuarta Zona Marítima",
+    hq: "Punta Arenas",
+    hqAddress: "Av. Colón 1098, Punta Arenas",
+    hqPhone: "+56 61 223 2200",
+    regions: ["Magallanes", "Antártica Chilena"],
+    lat: -53.1633,
+    lng: -70.9178,
+    governor: "Czre. Fernando Iglesias Vargas",
+    capitanias: 6,
+  },
+  {
+    code: "ZM-5",
+    name: "Quinta Zona Marítima",
+    hq: "Iquique",
+    hqAddress: "Aníbal Pinto 595, Iquique",
+    hqPhone: "+56 57 239 9300",
+    regions: ["Arica y Parinacota", "Tarapacá", "Antofagasta", "Atacama", "Coquimbo"],
+    lat: -20.2133,
+    lng: -70.1506,
+    governor: "Czre. Héctor Rojas Tello",
+    capitanias: 9,
+  },
+];
+
+export const ALL_REGIONS_FILTER = "all";
+
+// Helper: obtener zona marítima por código de región administrativa
+export function getZonaByRegion(regionName: string): ZonaMaritima | null {
+  for (const z of ZONAS_MARITIMAS) {
+    if (z.regions.includes(regionName)) return z;
+  }
+  return null;
+}
+
+// Helper: obtener zona marítima por nombre de puerto
+export function getZonaByPortName(portName: string): ZonaMaritima | null {
+  const port = PORTS.find((p) => p.name === portName);
+  return port ? getZonaByRegion(port.region) : null;
+}
+
 export interface Port {
   code: string;
   name: string;
@@ -38,6 +137,7 @@ export interface Vessel {
   zone: string;
   lastPort: string;
   risk: "low" | "medium" | "high";
+  zonaMaritima?: string;  // Código ZM-x
 }
 
 export interface MaritimeAlert {
@@ -47,6 +147,8 @@ export interface MaritimeAlert {
   title: string;
   description: string;
   zone: string;
+  region: string;       // Región administrativa
+  zonaMaritima: string; // Código ZM-x
   issuedAt: string;
   validUntil: string;
   acknowledged: boolean;
@@ -63,6 +165,7 @@ export interface AuditEntry {
   hash: string;
   prevHash: string;
   blockSeq: number;
+  zonaMaritima: string; // Código ZM-x
 }
 
 export interface Tramite {
@@ -75,6 +178,8 @@ export interface Tramite {
   submittedAt: string;
   amount: number;
   port: string;
+  region: string;
+  zonaMaritima: string;
   progress: number;
 }
 
@@ -146,6 +251,9 @@ export function generateVessels(count = 18): Vessel[] {
     const type = VESSEL_TYPES[Math.floor(rng() * VESSEL_TYPES.length)];
     const sog = type === "Passenger" ? rng() * 18 + 8 : rng() * 14 + 4;
     const cog = Math.floor(rng() * 360);
+    // Mapear la zona costera a la región administrativa
+    const region = zoneToRegion(point.zone);
+    const zonaMaritima = region ? (getZonaByRegion(region)?.code || "ZM-1") : "ZM-1";
     vessels.push({
       mmsi: `725${Math.floor(rng() * 900000 + 100000)}`,
       imo: `${9000000 + Math.floor(rng() * 999999)}`,
@@ -164,9 +272,28 @@ export function generateVessels(count = 18): Vessel[] {
       zone: point.zone,
       lastPort: COAST_POINTS[Math.floor(rng() * COAST_POINTS.length)].zone,
       risk: rng() > 0.85 ? "high" : rng() > 0.6 ? "medium" : "low",
+      zonaMaritima,
     });
   }
   return vessels;
+}
+
+// Helper local: mapear nombre de zona costera → región administrativa
+function zoneToRegion(zone: string): string | null {
+  const map: Record<string, string> = {
+    Arica: "Arica y Parinacota",
+    Iquique: "Tarapacá",
+    Antofagasta: "Antofagasta",
+    Caldera: "Atacama",
+    Coquimbo: "Coquimbo",
+    Valparaíso: "Valparaíso",
+    "San Antonio": "Valparaíso",
+    Talcahuano: "Biobío",
+    "Puerto Montt": "Los Lagos",
+    Chiloé: "Los Lagos",
+    "Punta Arenas": "Magallanes",
+  };
+  return map[zone] || null;
 }
 
 export function moveVessel(v: Vessel): Vessel {
@@ -189,6 +316,8 @@ export const INITIAL_ALERTS: MaritimeAlert[] = [
     title: "Alerta Roja — Viento Sur 38 nudos",
     description: "Viento sostenido sur de 38 nudos con ráfagas a 45 nudos. Mar de fondo 4.2 m. Se mantiene cierre temporal del puerto de Castro.",
     zone: "Chiloé — Castro",
+    region: "Los Lagos",
+    zonaMaritima: "ZM-3",
     issuedAt: "2026-10-03T05:30:00-03:00",
     validUntil: "2026-10-03T18:00:00-03:00",
     acknowledged: true,
@@ -200,6 +329,8 @@ export const INITIAL_ALERTS: MaritimeAlert[] = [
     title: "Restricción de calado — Puerto Montt",
     description: "Por condiciones de oleaje cruzado, restricción máxima de calado a 8.0 m para naves en operaciones de atraque.",
     zone: "Puerto Montt",
+    region: "Los Lagos",
+    zonaMaritima: "ZM-3",
     issuedAt: "2026-10-03T04:15:00-03:00",
     validUntil: "2026-10-03T20:00:00-03:00",
     acknowledged: true,
@@ -211,6 +342,8 @@ export const INITIAL_ALERTS: MaritimeAlert[] = [
     title: "Aviso a los Navegantes N° 42/26",
     description: "Boya de marca temporal desplazada en baliza San Antonio. Coordenadas actualizadas. Carta náutica vigente: SHOA 30000.",
     zone: "San Antonio",
+    region: "Valparaíso",
+    zonaMaritima: "ZM-1",
     issuedAt: "2026-10-03T02:00:00-03:00",
     validUntil: "2026-10-10T23:59:00-03:00",
     acknowledged: false,
@@ -222,6 +355,8 @@ export const INITIAL_ALERTS: MaritimeAlert[] = [
     title: "Tráfico denso — Zona Valparaíso",
     description: "Detección de 14 naves en zona de espera Valparaíso. Se recomienda coordinación con Prácticos para espaciamiento.",
     zone: "Valparaíso",
+    region: "Valparaíso",
+    zonaMaritima: "ZM-1",
     issuedAt: "2026-10-03T06:45:00-03:00",
     validUntil: "2026-10-03T12:00:00-03:00",
     acknowledged: false,
@@ -233,6 +368,8 @@ export const INITIAL_ALERTS: MaritimeAlert[] = [
     title: "Intrusión en zona restringida",
     description: "Buque pesquero 'Don Matías' ingresó a zona de fondeo prohibido norte Talcahuano. Contacto VHF canal 16 solicitado.",
     zone: "Talcahuano",
+    region: "Biobío",
+    zonaMaritima: "ZM-2",
     issuedAt: "2026-10-03T07:12:00-03:00",
     validUntil: "2026-10-03T09:00:00-03:00",
     acknowledged: false,
@@ -251,6 +388,7 @@ export const INITIAL_AUDIT: AuditEntry[] = [
     hash: "0000a7f3c2b1d4e8f5a9c0b3d2e1f4a8",
     prevHash: "0000b2e4f1a9c3d7e5b8a0f2c4d6e9a1",
     blockSeq: 432,
+    zonaMaritima: "ZM-1",
   },
   {
     id: "AUD-00431",
@@ -263,6 +401,7 @@ export const INITIAL_AUDIT: AuditEntry[] = [
     hash: "0000b2e4f1a9c3d7e5b8a0f2c4d6e9a1",
     prevHash: "0000c5d6e9a1b3f2a7c8d0e4f5a9b2c1",
     blockSeq: 431,
+    zonaMaritima: "ZM-3",
   },
   {
     id: "AUD-00430",
@@ -275,6 +414,7 @@ export const INITIAL_AUDIT: AuditEntry[] = [
     hash: "0000c5d6e9a1b3f2a7c8d0e4f5a9b2c1",
     prevHash: "0000d8e9a2b1c4f3a6d5e7b0c9d2e1f4",
     blockSeq: 430,
+    zonaMaritima: "ZM-3",
   },
   {
     id: "AUD-00429",
@@ -287,6 +427,7 @@ export const INITIAL_AUDIT: AuditEntry[] = [
     hash: "0000d8e9a2b1c4f3a6d5e7b0c9d2e1f4",
     prevHash: "0000e1f4a5b2c8d6e9a3b4c5d6e7f8a9",
     blockSeq: 429,
+    zonaMaritima: "ZM-2",
   },
   {
     id: "AUD-00428",
@@ -299,17 +440,18 @@ export const INITIAL_AUDIT: AuditEntry[] = [
     hash: "0000e1f4a5b2c8d6e9a3b4c5d6e7f8a9",
     prevHash: "0000f5a9b3c2d1e7f4a6b8c0d2e4f6a8",
     blockSeq: 428,
+    zonaMaritima: "ZM-1",
   },
 ];
 
 export const INITIAL_TRAMITES: Tramite[] = [
-  { folio: "T-2026-04412", type: "Zarpe", applicant: "Compañía Marítima del Pacífico SpA", applicantRut: "76.123.456-7", vessel: "Pacific Star", status: "En Revisión", submittedAt: "2026-10-03T07:12:00-03:00", amount: 3, port: "Valparaíso", progress: 45 },
-  { folio: "T-2026-04411", type: "Certificado", applicant: "Naviera Austral S.A.", applicantRut: "78.345.678-9", vessel: "Patagonia", status: "Aprobado", submittedAt: "2026-10-03T06:45:00-03:00", amount: 1.5, port: "Puerto Montt", progress: 100 },
-  { folio: "T-2026-04410", type: "Permiso Especial", applicant: "Pesquera Antares Ltda.", applicantRut: "79.987.654-3", vessel: "Calypso II", status: "Pagado", submittedAt: "2026-10-03T05:30:00-03:00", amount: 8.2, port: "Iquique", progress: 85 },
-  { folio: "T-2026-04409", type: "Zarpe", applicant: "Sudamericana de Transportes", applicantRut: "77.234.567-8", vessel: "Magallanes Express", status: "Ingresado", submittedAt: "2026-10-03T04:15:00-03:00", amount: 3, port: "San Antonio", progress: 15 },
-  { folio: "T-2026-04408", type: "Renovación", applicant: "Marítima del Norte", applicantRut: "76.876.543-2", vessel: "San José", status: "Rechazado", submittedAt: "2026-10-02T22:00:00-03:00", amount: 2.1, port: "Antofagasta", progress: 0 },
-  { folio: "T-2026-04407", type: "Inscripción", applicant: "Sociedad Ballenera Edén", applicantRut: "78.111.222-3", vessel: "Cabo de Hornos", status: "Aprobado", submittedAt: "2026-10-02T19:45:00-03:00", amount: 12.5, port: "Punta Arenas", progress: 100 },
-  { folio: "T-2026-04406", type: "Certificado", applicant: "Transpacific Chile", applicantRut: "77.555.666-7", vessel: "Beagle", status: "Borrador", submittedAt: "2026-10-02T17:20:00-03:00", amount: 1.5, port: "Valparaíso", progress: 5 },
+  { folio: "T-2026-04412", type: "Zarpe", applicant: "Compañía Marítima del Pacífico SpA", applicantRut: "76.123.456-7", vessel: "Pacific Star", status: "En Revisión", submittedAt: "2026-10-03T07:12:00-03:00", amount: 3, port: "Valparaíso", region: "Valparaíso", zonaMaritima: "ZM-1", progress: 45 },
+  { folio: "T-2026-04411", type: "Certificado", applicant: "Naviera Austral S.A.", applicantRut: "78.345.678-9", vessel: "Patagonia", status: "Aprobado", submittedAt: "2026-10-03T06:45:00-03:00", amount: 1.5, port: "Puerto Montt", region: "Los Lagos", zonaMaritima: "ZM-3", progress: 100 },
+  { folio: "T-2026-04410", type: "Permiso Especial", applicant: "Pesquera Antares Ltda.", applicantRut: "79.987.654-3", vessel: "Calypso II", status: "Pagado", submittedAt: "2026-10-03T05:30:00-03:00", amount: 8.2, port: "Iquique", region: "Tarapacá", zonaMaritima: "ZM-5", progress: 85 },
+  { folio: "T-2026-04409", type: "Zarpe", applicant: "Sudamericana de Transportes", applicantRut: "77.234.567-8", vessel: "Magallanes Express", status: "Ingresado", submittedAt: "2026-10-03T04:15:00-03:00", amount: 3, port: "San Antonio", region: "Valparaíso", zonaMaritima: "ZM-1", progress: 15 },
+  { folio: "T-2026-04408", type: "Renovación", applicant: "Marítima del Norte", applicantRut: "76.876.543-2", vessel: "San José", status: "Rechazado", submittedAt: "2026-10-02T22:00:00-03:00", amount: 2.1, port: "Antofagasta", region: "Antofagasta", zonaMaritima: "ZM-5", progress: 0 },
+  { folio: "T-2026-04407", type: "Inscripción", applicant: "Sociedad Ballenera Edén", applicantRut: "78.111.222-3", vessel: "Cabo de Hornos", status: "Aprobado", submittedAt: "2026-10-02T19:45:00-03:00", amount: 12.5, port: "Punta Arenas", region: "Magallanes", zonaMaritima: "ZM-4", progress: 100 },
+  { folio: "T-2026-04406", type: "Certificado", applicant: "Transpacific Chile", applicantRut: "77.555.666-7", vessel: "Beagle", status: "Borrador", submittedAt: "2026-10-02T17:20:00-03:00", amount: 1.5, port: "Valparaíso", region: "Valparaíso", zonaMaritima: "ZM-1", progress: 5 },
 ];
 
 export const NORMATIVA: NormaItem[] = [

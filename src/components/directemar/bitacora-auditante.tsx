@@ -26,8 +26,13 @@ import {
   generateHash,
   fmtDateTime,
   fmtTime,
+  ZONAS_MARITIMAS,
+  ALL_REGIONS_FILTER,
   type AuditEntry,
 } from "@/lib/directemar-data";
+import { RegionFilter } from "@/components/directemar/region-filter";
+import { ExportModal } from "@/components/directemar/export-modal";
+import type { ExportPayload } from "@/lib/export-utils";
 
 const ACTIONS = [
   { action: "Emisión de zarpe", detail: "Zarpe aprobado para M/V Atlantic Trader rumbo San Antonio.", actor: "Tello, R.", role: "Oficial VTS" },
@@ -46,6 +51,8 @@ export function BitacoraAuditante() {
   const [selected, setSelected] = useState<AuditEntry | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
+  const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Verificar integridad de la cadena — derivado del estado entries
   const chainValid = useMemo(() => {
@@ -56,6 +63,44 @@ export function BitacoraAuditante() {
     }
     return true;
   }, [entries]);
+
+  // Filtrar entradas por zona marítima
+  const filteredByZona = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return entries;
+    return entries.filter((e) => e.zonaMaritima === zonaFilter);
+  }, [entries, zonaFilter]);
+
+  const zonaLabel = useMemo(() => {
+    if (zonaFilter === ALL_REGIONS_FILTER) return "Nacional — Todo Chile";
+    const z = ZONAS_MARITIMAS.find((x) => x.code === zonaFilter);
+    return z ? `${z.code} · ${z.name} (${z.hq})` : "Nacional";
+  }, [zonaFilter]);
+
+  const exportPayload: ExportPayload<AuditEntry> = {
+    title: "Bitácora auditante",
+    subtitle: "Cadena de eventos con hash criptográfico encadenado",
+    zonaMaritimaLabel: zonaLabel,
+    columns: [
+      { key: "blockSeq", label: "Bloque #", format: (r) => String(r.blockSeq) },
+      { key: "timestamp", label: "Timestamp", format: (r) => fmtDateTime(r.timestamp) },
+      { key: "actor", label: "Actor" },
+      { key: "role", label: "Rol" },
+      { key: "action", label: "Acción" },
+      { key: "target", label: "Objetivo" },
+      { key: "detail", label: "Detalle" },
+      { key: "zonaMaritima", label: "Zona Marítima" },
+      { key: "hash", label: "Hash" },
+      { key: "prevHash", label: "Hash anterior" },
+    ],
+    rows: filteredByZona,
+    meta: {
+      "Total bloques": String(filteredByZona.length),
+      "Último bloque #": String(filteredByZona[0]?.blockSeq ?? 0),
+      "Integridad de cadena": chainValid ? "100% — Íntegra" : "Comprometida",
+      "Algoritmo": "SHA-256",
+      "Nodos de consenso": "3 (CL-SCL, CL-ARI, CL-PUQ)",
+    },
+  };
 
   // Simular generación de nuevos eventos periódicamente
   useEffect(() => {
@@ -84,7 +129,7 @@ export function BitacoraAuditante() {
     return () => clearInterval(i);
   }, []);
 
-  const filtered = entries.filter((e) => {
+  const filtered = filteredByZona.filter((e) => {
     if (filterAction !== "all" && !e.action.toLowerCase().includes(filterAction)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -128,12 +173,15 @@ export function BitacoraAuditante() {
             {chainValid ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Shield className="h-3.5 w-3.5" />}
             {chainValid ? "Cadena íntegra" : "Cadena comprometida"}
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setExportOpen(true)}>
             <Download className="h-3.5 w-3.5" />
             Exportar
           </Button>
         </div>
       </div>
+
+      {/* Region filter */}
+      <RegionFilter value={zonaFilter} onChange={setZonaFilter} variant="full" />
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -364,6 +412,9 @@ export function BitacoraAuditante() {
           </Card>
         </div>
       </div>
+
+      {/* Export modal */}
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} payload={exportPayload} />
     </div>
   );
 }
