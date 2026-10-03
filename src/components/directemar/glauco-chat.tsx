@@ -84,12 +84,14 @@ export function GlaucoChat() {
       try {
         const parsed = JSON.parse(stored) as Message[];
         // Filtrar mensajes de error antiguos para que no persistan entre sesiones
-        // (un error temporal del servidor no debería quedar visible para siempre)
         const cleaned = parsed.filter(
-          (m) => !m.id.startsWith("e-") || m.content.includes("Listo"),
+          (m) => !m.id.startsWith("e-"),
         );
         setMessages(cleaned);
-      } catch {}
+      } catch {
+        // Si el JSON está corrupto, limpiar todo
+        localStorage.removeItem(STORAGE_KEY);
+      }
     }
     let sid = localStorage.getItem(SESSION_KEY);
     if (!sid) {
@@ -135,10 +137,10 @@ export function GlaucoChat() {
     setLoading(true);
 
     try {
-      // Helper con timeout de 25s para evitar que el navegador cuelgue indefinidamente
+      // Helper con timeout para evitar que el navegador cuelgue indefinidamente
       const fetchWithTimeout = async (
         body: Record<string, unknown>,
-        timeoutMs = 25000,
+        timeoutMs = 30000,
       ): Promise<Response> => {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -157,73 +159,73 @@ export function GlaucoChat() {
         }
       };
 
-      let res: Response;
-      try {
-        res = await fetchWithTimeout({
-          message: content,
-          sessionId,
-          useWeb: true,
-        });
-      } catch (fetchErr) {
-        // Si el primer fetch falla (timeout/abort/red), reintenta sin web search
-        console.warn("[Glauco] Primer fetch falló, reintentando sin web search:", fetchErr);
-        res = await fetchWithTimeout({
-          message: content,
-          sessionId,
-          useWeb: false,
-        });
-      }
+      // Intentar hasta 3 veces con backoff exponencial
+      // 1er intento: useWeb=true (con búsqueda web)
+      // 2do intento: useWeb=false (sin búsqueda web, más rápido)
+      // 3er intento: useWeb=false con timeout más largo
+      const attempts = [
+        { useWeb: true, timeout: 30000 },
+        { useWeb: false, timeout: 25000 },
+        { useWeb: false, timeout: 45000 },
+      ];
 
-      if (!res.ok) {
-        // Reintento sin web search si el servidor devuelve 5xx
-        if (res.status >= 500) {
-          const retryRes = await fetchWithTimeout({
+      let lastError: unknown = null;
+      let successData: { reply: string; sources?: any[]; mood?: string; breathSuggested?: boolean; topicLearned?: string } | null = null;
+
+      for (let i = 0; i < attempts.length; i++) {
+        const attempt = attempts[i];
+        try {
+          const res = await fetchWithTimeout({
             message: content,
             sessionId,
-            useWeb: false,
-          });
-          if (retryRes.ok) {
-            const data = await retryRes.json();
-            const aiMsg: Message = {
-              id: `a-${Date.now()}`,
-              role: "assistant",
-              content: data.reply,
-              sources: data.sources,
-              mood: data.mood,
-              breathSuggested: data.breathSuggested,
-              timestamp: Date.now(),
-            };
-            setMessages((prev) => [...prev, aiMsg]);
-            return;
+            useWeb: attempt.useWeb,
+          }, attempt.timeout);
+
+          if (res.ok) {
+            successData = await res.json();
+            break;
+          }
+          // Si es 4xx (cliente error), no reintentar
+          if (res.status >= 400 && res.status < 500) {
+            throw new Error(`HTTP ${res.status}`);
+          }
+          lastError = new Error(`HTTP ${res.status}`);
+        } catch (err) {
+          lastError = err;
+          // Si no es el último intento, esperar un poco antes de reintentar
+          if (i < attempts.length - 1) {
+            await new Promise((r) => setTimeout(r, 800 * (i + 1)));
           }
         }
-        throw new Error(`HTTP ${res.status}`);
       }
 
-      const data = await res.json();
+      if (!successData) {
+        throw lastError || new Error("Todos los intentos fallaron");
+      }
+
       const aiMsg: Message = {
         id: `a-${Date.now()}`,
         role: "assistant",
-        content: data.reply,
-        sources: data.sources,
-        mood: data.mood,
-        breathSuggested: data.breathSuggested,
+        content: successData.reply,
+        sources: successData.sources,
+        mood: successData.mood as any,
+        breathSuggested: successData.breathSuggested,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, aiMsg]);
 
-      if (data.topicLearned) {
+      if (successData.topicLearned) {
         setTopicsLearned((prev) =>
-          prev.includes(data.topicLearned) ? prev : [...prev, data.topicLearned],
+          prev.includes(successData.topicLearned!) ? prev : [...prev, successData.topicLearned!],
         );
       }
     } catch (err) {
-      console.error("[Glauco] Error en cliente:", err);
+      console.error("[Glauco] Todos los reintentos fallaron:", err);
       const errMsg: Message = {
         id: `e-${Date.now()}`,
         role: "assistant",
         content:
-          "Compa, se me cortó la señal del lado del servidor. Ya me reinicié — intenta escribirme de nuevo, debería funcionar.",
+          "Compa, el servidor está tardando más de lo normal. Espera 10 segundos y prueba de nuevo — el servicio se reinicia solo.",
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errMsg]);
