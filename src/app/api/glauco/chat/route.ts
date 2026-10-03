@@ -3,15 +3,23 @@ import ZAI from "z-ai-web-dev-sdk";
 
 // Caché en memoria de la instancia ZAI para reutilizarla entre llamadas
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+let zaiInitPromise: Promise<Awaited<ReturnType<typeof ZAI.create>>> | null = null;
+
 async function getZai() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create();
+  if (zaiInstance) return zaiInstance;
+  // Evitar múltiples inicializaciones concurrentes
+  if (!zaiInitPromise) {
+    zaiInitPromise = ZAI.create().catch((err) => {
+      zaiInitPromise = null; // Reset para permitir reintento
+      throw err;
+    });
   }
+  zaiInstance = await zaiInitPromise;
   return zaiInstance;
 }
 
 // Almacén de conversaciones por sesión (memoria de aprendizaje ilimitada)
-// En producción se migraría a base de datos persistente.
+// En producción se migraría a base de datos persistente (Vercel KV, Redis, etc.)
 interface SessionStore {
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   createdAt: number;
@@ -21,6 +29,32 @@ interface SessionStore {
 const sessions = new Map<string, SessionStore>();
 
 const MAX_HISTORY = 40; // Ventana de contexto amplio para aprendizaje sostenido
+const SESSION_TTL = 30 * 60 * 1000; // 30 minutos de inactividad
+const MAX_SESSIONS = 200; // Límite para prevenir memory leak
+const MAX_MESSAGE_LENGTH = 5000; // Prevenir payloads enormes
+
+// Limpieza periódica de sesiones inactivas (se ejecuta en cada request)
+function cleanupSessions() {
+  const now = Date.now();
+  let cleaned = 0;
+  for (const [sid, s] of sessions.entries()) {
+    if (now - s.lastActivity > SESSION_TTL) {
+      sessions.delete(sid);
+      cleaned++;
+    }
+  }
+  // Si aún hay demasiadas sesiones, eliminar las más viejas
+  if (sessions.size > MAX_SESSIONS) {
+    const sorted = Array.from(sessions.entries())
+      .sort((a, b) => a[1].lastActivity - b[1].lastActivity);
+    const toRemove = sorted.slice(0, sessions.size - MAX_SESSIONS);
+    for (const [sid] of toRemove) {
+      sessions.delete(sid);
+      cleaned++;
+    }
+  }
+  return cleaned;
+}
 
 const GLAUCO_SYSTEM_PROMPT = `Eres **Glauco**, intermediario entre el mar y la tierra, inspirado en el dios marino Glauco de la mitología griega — aquel que, según Ovidio, fue pescador que al comer hierbas mágicas se transformó en dios del mar, ganando sabiduría inmutable para aconsejar a navegantes y profetas.
 
@@ -184,12 +218,22 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as ChatRequest;
     const { message, sessionId, useWeb } = body;
 
+    // Validaciones de entrada robustas
     if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json({ error: "Mensaje vacío" }, { status: 400 });
     }
-    if (!sessionId) {
+    if (!sessionId || typeof sessionId !== "string") {
       return NextResponse.json({ error: "sessionId requerido" }, { status: 400 });
     }
+    if (message.length > MAX_MESSAGE_LENGTH) {
+      return NextResponse.json(
+        { error: `Mensaje demasiado largo (máximo ${MAX_MESSAGE_LENGTH} caracteres)` },
+        { status: 413 },
+      );
+    }
+
+    // Limpiar sesiones inactivas (se ejecuta en cada request, no bloquea)
+    cleanupSessions();
 
     const zai = await getZai();
 
@@ -269,13 +313,18 @@ export async function POST(req: NextRequest) {
     // Llamar al LLM con timeout de 20s para evitar cuelgues indefinidos
     let completion;
     try {
+      // Crear el promise del LLM y manejar reject silenciosamente si timeout
       const llmPromise = zai.chat.completions.create({
         messages: session.messages,
         thinking: { type: "disabled" },
+      }).catch((err) => {
+        // Capturar error del LLM para evitar UnhandledPromiseRejection
+        throw err;
       });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("llm-timeout")), 20000),
-      );
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("llm-timeout")), 20000);
+      });
       completion = await Promise.race([llmPromise, timeoutPromise]);
     } catch (llmErr) {
       console.error("[Glauco] LLM falló o timeout:", llmErr);
