@@ -70,7 +70,8 @@ const SEVERITY_CONFIG: Record<MaritimeAlert["severity"], { color: string; bg: st
 };
 
 export function OperacionVTS() {
-  const [vessels, setVessels] = useState<Vessel[]>(() => generateVessels(18));
+  // Generar buques dinámicos (datos que cambian cada carga)
+  const [vessels, setVessels] = useState<Vessel[]>(() => generateVessels(18 + Math.floor(Math.random() * 8), true));
   const [selectedMmsi, setSelectedMmsi] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -82,21 +83,36 @@ export function OperacionVTS() {
   const [zonaFilter, setZonaFilter] = useState<string>(ALL_REGIONS_FILTER);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [lastRefresh, setLastRefresh] = useState<string>(new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+
+  // Refrescar datos AIS cada 30 segundos (datos completamente nuevos)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      try {
+        setVessels(generateVessels(18 + Math.floor(Math.random() * 8), true));
+        setLastRefresh(new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+      } catch {
+        // Si falla, mantener datos actuales
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Movimiento de buques cada 2 segundos (animación suave)
+  useEffect(() => {
+    if (vessels.length === 0) return;
+    const interval = setInterval(() => {
+      setVessels((prev) => prev.map(moveVessel));
+      setTickCount((t) => t + 1);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [vessels.length]);
 
   // Filtrar alertas por zona marítima
   const filteredAlerts = useMemo(() => {
     if (zonaFilter === ALL_REGIONS_FILTER) return alerts;
     return alerts.filter((a) => a.zonaMaritima === zonaFilter);
   }, [alerts, zonaFilter]);
-
-  // Real-time vessel movement simulation
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setVessels((prev) => prev.map(moveVessel));
-      setTickCount((t) => t + 1);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
 
   const filtered = useMemo(() => {
     // Primero filtra por zona marítima
@@ -223,6 +239,7 @@ export function OperacionVTS() {
               onZoomChange={setZoom}
               pan={pan}
               onPanChange={setPan}
+              lastRefresh={lastRefresh}
             />
           </CardContent>
         </Card>
@@ -507,6 +524,7 @@ function TacticalMap({
   onZoomChange,
   pan,
   onPanChange,
+  lastRefresh,
 }: {
   vessels: Vessel[];
   selectedMmsi: string | null;
@@ -517,6 +535,7 @@ function TacticalMap({
   onZoomChange: (z: number) => void;
   pan: { x: number; y: number };
   onPanChange: (p: { x: number; y: number }) => void;
+  lastRefresh?: string;
 }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -1159,6 +1178,11 @@ function TacticalMap({
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 pulse-dot" />
             <span className="text-emerald-400">AIS LIVE</span>
           </div>
+          {lastRefresh && (
+            <div className="text-emerald-400/60 mt-0.5">
+              ÚPDATE {lastRefresh}
+            </div>
+          )}
         </div>
       </div>
 

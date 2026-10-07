@@ -411,24 +411,53 @@ function seedRandom(seed: number) {
   };
 }
 
-export function generateVessels(count = 18): Vessel[] {
-  const rng = seedRandom(42);
+export function generateVessels(count = 18, dynamic = false): Vessel[] {
+  // En modo dinámico, usar semilla basada en tiempo (cambia cada llamada)
+  const rng = dynamic ? seedRandom(Date.now() % 1000000) : seedRandom(42);
   const vessels: Vessel[] = [];
+  const usedNames = new Set<string>();
+  const usedMMSIs = new Set<string>();
+
   for (let i = 0; i < count; i++) {
     const point = COAST_POINTS[Math.floor(rng() * COAST_POINTS.length)];
     const lat = point.lat + (rng() - 0.5) * 0.6;
     const lng = point.lng + (rng() - 0.5) * 0.4;
-    const name = VESSEL_NAMES[i % VESSEL_NAMES.length];
+
+    // Nombre único (evitar duplicados en modo dinámico)
+    let name = VESSEL_NAMES[Math.floor(rng() * VESSEL_NAMES.length)];
+    let attempts = 0;
+    while (usedNames.has(name) && attempts < 5) {
+      name = VESSEL_NAMES[Math.floor(rng() * VESSEL_NAMES.length)];
+      attempts++;
+    }
+    usedNames.add(name);
+
     const type = VESSEL_TYPES[Math.floor(rng() * VESSEL_TYPES.length)];
     const sog = type === "Passenger" ? rng() * 18 + 8 : rng() * 14 + 4;
     const cog = Math.floor(rng() * 360);
-    // Mapear la zona costera a la región administrativa
     const region = zoneToRegion(point.zone);
     const zonaMaritima = region ? (getZonaByRegion(region)?.code || "ZM-1") : "ZM-1";
+
+    // MMSI único
+    let mmsi = `725${Math.floor(rng() * 900000 + 100000)}`;
+    attempts = 0;
+    while (usedMMSIs.has(mmsi) && attempts < 5) {
+      mmsi = `725${Math.floor(rng() * 900000 + 100000)}`;
+      attempts++;
+    }
+    usedMMSIs.add(mmsi);
+
+    // Nombre según tipo de buque
+    const vesselName =
+      type === "Naval" ? ["Cabo Raso", "Piloto Pardo", "Lautaro", "Aquiles"][Math.floor(rng() * 4)]
+      : type === "Pilot" ? `Práctico ${Math.floor(rng() * 12 + 1).toString().padStart(2, "0")}`
+      : type === "Tug" ? `Remolcador ${["Bahía", "Puerto", "Mar", "Costa"][Math.floor(rng() * 4)]}`
+      : name;
+
     vessels.push({
-      mmsi: `725${Math.floor(rng() * 900000 + 100000)}`,
+      mmsi,
       imo: `${9000000 + Math.floor(rng() * 999999)}`,
-      name: type === "Naval" ? "Cabo Raso" : type === "Pilot" ? "Práctico 03" : type === "Tug" ? "Remolcador Bahía" : `${name}`,
+      name: vesselName,
       flag: FLAGS[Math.floor(rng() * FLAGS.length)],
       type,
       lat,
@@ -438,7 +467,7 @@ export function generateVessels(count = 18): Vessel[] {
       draftM: Math.round((rng() * 12 + 4) * 10) / 10,
       lengthM: Math.floor(rng() * 200 + 30),
       destination: COAST_POINTS[Math.floor(rng() * COAST_POINTS.length)].zone,
-      eta: `${Math.floor(rng() * 23)}:${Math.floor(rng() * 60).toString().padStart(2, "0")}h`,
+      eta: `${Math.floor(rng() * 48 + 1).toString().padStart(2, "0")}:${Math.floor(rng() * 60).toString().padStart(2, "0")}h`,
       status: sog > 1 ? "Under way" : rng() > 0.5 ? "At anchor" : "Moored",
       zone: point.zone,
       lastPort: COAST_POINTS[Math.floor(rng() * COAST_POINTS.length)].zone,
